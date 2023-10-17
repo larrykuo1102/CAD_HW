@@ -6,7 +6,6 @@
 #include <boost/graph/adjacency_list.hpp>
 using namespace std ;
 
-
 // vector<string>
 unordered_map<string,size_t> gGateVertex ;
 string gModelName ;
@@ -23,6 +22,7 @@ string ReadaToken( ifstream & file ) ;
 string PeekaToken(ifstream & file) ;
 bool IsNumber( char ch ) ;
 string analyzeGate(ifstream & file, vector<string> gate) ;
+void buildTree( string type, vector<string> gate ) ;
 
 struct VertexProperty {
     string name;
@@ -33,6 +33,7 @@ struct VertexProperty {
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, VertexProperty> DirectedGraph;
 typedef boost::graph_traits<DirectedGraph>::vertex_descriptor vertex_descriptor_t;
 DirectedGraph g;
+typedef DirectedGraph::vertex_descriptor Vertex;
 vertex_descriptor_t src, dst;
 // 
 
@@ -110,7 +111,19 @@ void readLabel( ifstream & file ) {
 } // readLabel
 
 void analyzeLabel( string type, ifstream & file ) {
-    vertex_descriptor_t src, dst;
+    vertex_descriptor_t head, tail ;
+    if ( ! gGateVertex["head"] && ! gGateVertex["tail"] ) {
+        head = boost::add_vertex(g);
+        tail = boost::add_vertex(g);
+        g[head].name = "head" ;
+        g[tail].name = "tail" ;
+        gGateVertex["head"] = head ;
+        gGateVertex["tail"] = tail ;
+    } // if
+    else {
+        head = gGateVertex["head"] ;
+        tail = gGateVertex["tail"] ;
+    }
     cout << "analyzeLabel " << type << endl ;
     if ( type == ".model") {
         gModelName = GetaToken( file ) ;
@@ -121,11 +134,12 @@ void analyzeLabel( string type, ifstream & file ) {
         gInputs = readGate(file) ;
 
         for ( auto i : gInputs ) {
+            cout << i << " " ;
             DirectedGraph::vertex_descriptor temp_vertex = boost::add_vertex(g);
             gGateVertex[i] = temp_vertex ;
             g[temp_vertex].name = i ;
             g[temp_vertex].type = "NOP" ;
-            boost::add_edge(temp_vertex, dst, g);
+            boost::add_edge(head, temp_vertex, g);
         }
 
         cout << endl ;
@@ -139,7 +153,7 @@ void analyzeLabel( string type, ifstream & file ) {
             gGateVertex[i] = temp_vertex ;
             g[temp_vertex].name = i ;
             g[temp_vertex].type = "NOP" ;
-            boost::add_edge(temp_vertex, dst, g);
+            boost::add_edge(temp_vertex, tail, g);
         } // for
         // cout << endl ;
     }
@@ -208,6 +222,7 @@ void buildTree( string type, vector<string> gate ) {
         DirectedGraph::vertex_descriptor v1 = boost::add_vertex(g);
         g[v1].name = dest ;
         g[v1].type = type ;
+        gGateVertex[dest] = v1 ;
     }
     else if ( gGateVertex[dest] && g[gGateVertex[dest]].type.empty()) {
         g[gGateVertex[dest]].type = type ;
@@ -215,7 +230,7 @@ void buildTree( string type, vector<string> gate ) {
     else {
         // 已經加過了
     } // else
-    size_t destVertex = gGateVertex[dest] ;
+    DirectedGraph::vertex_descriptor destVertex = gGateVertex[dest] ;
     gate.pop_back() ;
     for ( auto i : gate ) {
         if ( gGateVertex[i] ) {
@@ -225,7 +240,7 @@ void buildTree( string type, vector<string> gate ) {
         else {
             DirectedGraph::vertex_descriptor v1 = boost::add_vertex(g);
             gGateVertex[i] = v1 ;
-            g[v1].name = dest ;
+            g[v1].name = i ;
             g[v1].type = type ;
             boost::add_edge(v1, destVertex, g) ;
         }
@@ -241,6 +256,16 @@ int ILPSolver() {
 
 } // ILPSolver
 
+void ILP_Formulation() {
+    // Unique start times
+
+    // Sequencing
+
+    // Resource constraints
+
+    // 
+} // ILP_Formulation
+
 int ALAP() {
 
 } // ALAP
@@ -249,12 +274,33 @@ int ASAP() {
 
 } // ASAP
 
+int vertex_dfs() {
+    std::vector<bool> visited(boost::num_vertices(g), false);
+
+    std::function<void(Vertex)> dfs = [&](Vertex v) {
+        visited[v] = true;
+        std::cout << "Visiting vertex " << v << " " << g[v].name << " " << g[v].type << std::endl;
+        DirectedGraph::adjacency_iterator vi, vi_end;
+        for (boost::tie(vi, vi_end) = boost::adjacent_vertices(v, g); vi != vi_end; ++vi) {
+            Vertex neighbor = *vi;
+            if (!visited[neighbor]) {
+                dfs(neighbor);
+            }
+        }
+    };
+
+    for (Vertex v : boost::make_iterator_range(boost::vertices(g))) {
+        if (!visited[v]) {
+            dfs(v);
+        }
+    }
+}
 
 int main(int argc, char const *argv[])
 {   
     cout << "Start" << endl ;
     readFile() ;
+    
     /* code */
-    cout << "End" << endl ;
     return 0;
 }
