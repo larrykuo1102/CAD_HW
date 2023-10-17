@@ -12,6 +12,10 @@ string gModelName ;
 string gNewToken ;
 vector<string> gInputs ;
 vector<string> gOutputs ;
+int gandConstraint = 0;
+int gorConstraint = 0;
+int gnotConstraint = 0;
+string gblifFile ;
 
 void readLabel(ifstream & file) ;
 void analyzeLabel( string type, ifstream & file ) ;
@@ -38,9 +42,9 @@ vertex_descriptor_t src, dst;
 // 
 
 void readFile() {
-    ifstream inputFile( "./aoi_benchmark/aoi_sample01.blif") ;
+    ifstream inputFile( "./aoi_benchmark/"+ gblifFile ) ;
     if ( ! inputFile.is_open() )  {
-        cerr << "File not opened !" ;
+        cerr << "File not opened !\n" ;
         return ;   
     }
     else 
@@ -248,7 +252,13 @@ void buildTree( string type, vector<string> gate ) {
 } // buildTree
 
 int ListScheduling() {
+    // Change Satus
 
+    // Check the resource
+
+    // run 1 cycle
+
+    // cycle ++
 } // ListScheduling
 
 
@@ -275,6 +285,7 @@ int ASAP() {
 } // ASAP
 
 int vertex_dfs() {
+    cout << "Vertex_dfs : " << endl ;
     std::vector<bool> visited(boost::num_vertices(g), false);
 
     std::function<void(Vertex)> dfs = [&](Vertex v) {
@@ -294,13 +305,43 @@ int vertex_dfs() {
             dfs(v);
         }
     }
+    cout << "=================================================" << endl ;
+}
+
+string ManageOption(int argc, char const *argv[]) {  
+    if (argc != 6) {
+        cerr << "Usage: " << argv[0] << " -e/-h BLIF_FILE AND_CONSTRAINT OR_CONSTRAINT NOT_CONSTRAINT" << std::endl;
+        return "failed";
+    } // if
+
+    for (int i = 1; i < argc; ++i) {
+        if ( i == 1 && i + 1 < argc) {
+            gblifFile = argv[i + 1];
+            i++;
+        } else if (i == 3) {
+            gandConstraint = stoi(argv[i]);
+        } else if (i == 4) {
+            gorConstraint = stoi(argv[i]);
+        } else if (i == 5) {
+            gnotConstraint = stoi(argv[i]);
+        }
+    }
+
+    return argv[1] ;
 }
 
 int main(int argc, char const *argv[])
 {   
     cout << "Start" << endl ;
+    string option = ManageOption(argc, argv) ;
     readFile() ;
-    
+    if ( option == "-h") {
+
+    } // if
+    else if ( option == "-e") {
+
+    }
+    vertex_dfs() ;
     /* code */
     return 0;
 }
