@@ -3,11 +3,15 @@
 # include <vector>
 # include <string>
 # include <unordered_map>
-#include <boost/graph/adjacency_list.hpp>
+# include <boost/graph/adjacency_list.hpp>
+# include <queue>
+# include <functional>
 using namespace std ;
 
-// vector<string>
 unordered_map<string,size_t> gGateVertex ;
+unordered_map<string,vector<string>> gGateInbound ;
+unordered_map<string,bool> gGateStatus ;
+queue<string> readyqueue ;
 string gModelName ;
 string gNewToken ;
 vector<string> gInputs ;
@@ -32,6 +36,11 @@ struct VertexProperty {
     string name;
     string type;
 };
+
+struct ReadyQueue {
+    string name ;
+    int delay ;
+} ;
 
 // Tree
 typedef boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, VertexProperty> DirectedGraph;
@@ -251,10 +260,24 @@ void buildTree( string type, vector<string> gate ) {
     }
 } // buildTree
 
-int ListScheduling() {
-    // Change Satus
+bool checkResourceValid( string gate ) {
+    gGateStatus ;
 
-    // Check the resource
+    return false ;
+} // checkResourceValid
+
+int ListScheduling() {
+    gandConstraint ;
+    gorConstraint ;
+    gnotConstraint ;
+    gGateInbound ;
+    // Change Status
+        // Check GateResource Valid from gGateStatus
+        // put ready Gate into readyqueue
+
+    // Check how many resource this cycle can use
+
+    // get resource from readyqueue ( 'select' priority )
 
     // run 1 cycle
 
@@ -286,11 +309,11 @@ int ASAP() {
 
 int vertex_dfs() {
     cout << "Vertex_dfs : " << endl ;
-    std::vector<bool> visited(boost::num_vertices(g), false);
+    vector<bool> visited(boost::num_vertices(g), false);
 
-    std::function<void(Vertex)> dfs = [&](Vertex v) {
+    function<void(Vertex)> dfs = [&](Vertex v) {
         visited[v] = true;
-        std::cout << "Visiting vertex " << v << " " << g[v].name << " " << g[v].type << std::endl;
+        cout << "Visiting vertex " << v << " " << g[v].name << " " << g[v].type << std::endl;
         DirectedGraph::adjacency_iterator vi, vi_end;
         for (boost::tie(vi, vi_end) = boost::adjacent_vertices(v, g); vi != vi_end; ++vi) {
             Vertex neighbor = *vi;
