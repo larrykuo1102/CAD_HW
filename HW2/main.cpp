@@ -27,13 +27,6 @@ int gorConstraint = 0;
 int gnotConstraint = 0;
 string gblifFile ;
 
-// List Scheduling
-unordered_map<string,vector<string>> gGateInbound ;
-unordered_map<string,bool> gGateStatus ;
-queue<string> ANDreadyqueue ;
-queue<string> ORreadyqueue ;
-queue<string> NOTreadyqueue ;
-// queue<string> waitingqueue ; // wait for the resource
 
 
 // Tree
@@ -44,6 +37,14 @@ typedef DirectedGraph::vertex_descriptor Vertex;
 vertex_descriptor_t ghead, gtail ;
 unordered_map<string,size_t> gGateVertex ;
 // 
+
+
+// List Scheduling
+unordered_map<string,vector<string>> gGateInbound ;
+unordered_map<string,bool> gGateStatus ;
+queue<Vertex> ANDreadyqueue ;
+queue<Vertex> ORreadyqueue ;
+queue<Vertex> NOTreadyqueue ;
 
 void readLabel(ifstream & file) ;
 void analyzeLabel( string type, ifstream & file ) ;
@@ -159,15 +160,15 @@ void analyzeLabel( string type, ifstream & file ) {
             // g[temp_vertex].type = "NOP" ;
             // boost::add_edge(ghead, temp_vertex, g);
             
-            gGateStatus[i] = true ;
+            // gGateStatus[i] = true ;
         }
 
         cout << endl ;
     }
     else if ( type == ".outputs") {
         gOutputs = readGate(file) ;
-
         cout << "\toutputs: " ;
+        gGateInbound["tail"] = vector<string>(gOutputs.begin(),gOutputs.end()) ;
         for ( auto i : gOutputs ) {
             // DirectedGraph::vertex_descriptor temp_vertex = boost::add_vertex(g);
             // gGateVertex[i] = temp_vertex ;
@@ -277,29 +278,51 @@ void buildTree( string type, vector<string> gate ) {
                 boost::tie(e, edgeExists) = boost::edge(ghead, destVertex, g) ;
                 if (!edgeExists) { // 不要有重複的邊
                     e = boost::add_edge(ghead, destVertex, g).first ;
-                }
+                } // if
+
+                gGateStatus[i] = true ;
             }
         }
     } // for
 } // buildTree
 
-bool checkResourceValid( string gate ) {
-    gGateStatus ;
-
-    return false ;
-} // checkResourceValid
-
-void GateInputChange( queue<string> & eachqueue, VertexProperty resource ) {
-    if ( resource.type == "AND") {
-        eachqueue.push(resource.name) ;
+void AddReadyQueue( Vertex resource ) {
+    if ( g[resource].type == "AND") {
+        ANDreadyqueue.push(resource) ;
     } // if
-    else if (resource.type == "OR") {
-
+    else if (g[resource].type == "OR") {
+        ORreadyqueue.push(resource) ;
     }
     else {
-
+        NOTreadyqueue.push(resource) ;
     }
-} // GateInputChange
+
+    if ( g[resource].name == "tail")
+        cout << "Finish " << endl ;
+} // AddReadyQueue
+
+void PickResource( vector<Vertex> & nextGate ) {
+    for ( int i = 0 ; i < gandConstraint ; i ++ ) {
+        if ( ANDreadyqueue.size() == 0 ) 
+            break ;
+        nextGate.push_back(ANDreadyqueue.back()) ;
+        ANDreadyqueue.pop() ;
+    } // for
+    for ( int i = 0 ; i < gorConstraint ; i ++ ) {
+        if ( ORreadyqueue.size() == 0 ) 
+            break ;
+        nextGate.push_back(ORreadyqueue.back()) ;
+        ORreadyqueue.pop() ;
+    } // for
+    for ( int i = 0 ; i < gnotConstraint ; i ++ ) {
+        if ( NOTreadyqueue.size() == 0 ) 
+            break ;
+        nextGate.push_back(NOTreadyqueue.back()) ;
+        NOTreadyqueue.pop() ;
+    } // for
+
+
+} // PickResource
 
 int ListScheduling() {
     gandConstraint ;
@@ -308,41 +331,67 @@ int ListScheduling() {
     
     bool finish = false ;
     int cycle = 0 ;
-    Vertex v ;
     vector<bool> visited(boost::num_vertices(g), false);
     unordered_map<Vertex,int> waitingqueue;
-    // visited[v] = true;
-    while( ! finish ) {
-        if ( cycle == 0 ) {
-            DirectedGraph::adjacency_iterator ai, ai_end;
-            cout << "ListScheduling test" << endl ;
-            for (boost::tie(ai, ai_end) = boost::adjacent_vertices(ghead, g); ai != ai_end; ++ai) {
-                if ( ! waitingqueue[*ai] ) {
-                    waitingqueue[*ai] = 1;
-                }
-                else {
-                    waitingqueue[*ai] ++ ;
-                }
+    vector<Vertex> nextGate ;
+    nextGate.push_back(ghead) ;
+    while( ! finish && cycle < 5 ) {
+        cout << "Cycle : " << cycle << endl ;
+        if ( ! nextGate.empty() ) { 
+            for ( auto i : nextGate ) {
+                DirectedGraph::adjacency_iterator ai, ai_end;
+                cout << "  ListScheduling test, Vertex : " << g[i].name << endl ;
+                for (boost::tie(ai, ai_end) = boost::adjacent_vertices(i, g); ai != ai_end; ++ai) {
+                    cout <<"  | " << g[*ai].name << "'s turn" << endl ;
+                    if ( ! waitingqueue[*ai] ) {
+                        waitingqueue[*ai] = 0;
+                    } // if
 
-                // 待修改
-                if ( waitingqueue[*ai] == gGateInbound[g[*ai].name].size() ) {
-                    ORreadyqueue.push(g[*ai].name) ;
-                } // if
-                cout << g[*ai].name << endl ;
-            } // for
+
+                    if ( cycle == 0 ) { 
+                        for ( auto inbound : gGateInbound[g[*ai].name]) {
+                            // cout << inbound << " test " << gGateStatus[inbound] << endl ;
+                            if ( gGateStatus[inbound] )
+                                waitingqueue[*ai] ++ ;
+                        } // for
+                    } // if
+                    else 
+                        waitingqueue[*ai] ++ ;
+
+                    if ( waitingqueue[*ai] == gGateInbound[g[*ai].name].size() ) {
+                        AddReadyQueue( *ai ) ;
+                        cout << "       " << g[*ai].name << " is ready" << endl ;
+                    } // if
+                    else {
+                        cout << "    | " << g[*ai].name << " not enough inbound :" << waitingqueue[*ai] << endl ;
+                    }
+                } // for
+            }
+            nextGate.clear() ;
         } // if
+        else { // no new gate
 
+        } // else 
 
         // Change Status
             // Check GateResource Valid from gGateStatus
             // put ready Gate into readyqueue
 
         // Check how many resource this cycle can use
-
         // get resource from readyqueue ( 'select' priority )
+        PickResource( nextGate) ;
 
         // run 1 cycle
-
+        if ( ! nextGate.empty()) {
+            cout << "=== " ;
+            for ( auto test : nextGate ) {
+                cout << g[test].name << " " ;
+            }
+            cout << "=== " << endl ;
+        }
+        else {
+            cout << "=== empty === " << endl ;
+        }
         cycle ++ ;
     } // while
 
@@ -372,7 +421,7 @@ int ASAP() {
 
 } // ASAP
 
-int vertex_dfs() {
+void vertex_dfs() {
     cout << "Vertex_dfs : " << endl ;
     vector<bool> visited(boost::num_vertices(g), false);
 
