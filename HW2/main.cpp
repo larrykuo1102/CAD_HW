@@ -26,7 +26,7 @@ int gandConstraint = 0;
 int gorConstraint = 0;
 int gnotConstraint = 0;
 string gblifFile ;
-
+unordered_map<string,int> gCycleRecord ;
 
 
 // Tree
@@ -137,6 +137,8 @@ void analyzeLabel( string type, ifstream & file ) {
         gtail = boost::add_vertex(g);
         g[ghead].name = "head" ;
         g[gtail].name = "tail" ;
+        g[ghead].type = "NOP" ;
+        g[gtail].type = "NOP" ;
         gGateVertex["head"] = ghead ;
         gGateVertex["tail"] = gtail ;
     } // if
@@ -170,11 +172,10 @@ void analyzeLabel( string type, ifstream & file ) {
         cout << "\toutputs: " ;
         gGateInbound["tail"] = vector<string>(gOutputs.begin(),gOutputs.end()) ;
         for ( auto i : gOutputs ) {
-            // DirectedGraph::vertex_descriptor temp_vertex = boost::add_vertex(g);
-            // gGateVertex[i] = temp_vertex ;
-            // g[temp_vertex].name = i ;
-            // g[temp_vertex].type = "NOP" ;
-            // boost::add_edge(temp_vertex, gtail, g);
+            DirectedGraph::vertex_descriptor temp_vertex = boost::add_vertex(g);
+            gGateVertex[i] = temp_vertex ;
+            g[temp_vertex].name = i ;
+            boost::add_edge(temp_vertex, gtail, g);
 
             gGateStatus[i] = false ;
         } // for
@@ -218,7 +219,7 @@ string analyzeGate(ifstream & file, vector<string> gate) {
     // cout << temp_String << "\tFirst Gate" << endl ;
     if (temp_String.find('-') != string::npos )  {
         // cout << "=====OR Gate=====" << endl ;
-        type = "or" ;
+        type = "OR" ;
         GetaToken(file) ;
         for ( int i = 2 ; i < gate.size() ; i ++ ) {
             GetaToken(file) ;
@@ -286,7 +287,7 @@ void buildTree( string type, vector<string> gate ) {
     } // for
 } // buildTree
 
-void AddReadyQueue( Vertex resource ) {
+bool AddReadyQueue( Vertex resource ) {
     if ( g[resource].type == "AND") {
         ANDreadyqueue.push(resource) ;
     } // if
@@ -297,11 +298,15 @@ void AddReadyQueue( Vertex resource ) {
         NOTreadyqueue.push(resource) ;
     }
 
-    if ( g[resource].name == "tail")
+    if ( g[resource].name == "tail") {
         cout << "Finish " << endl ;
+        return true ;
+    }
+    return false ;
 } // AddReadyQueue
 
 void PickResource( vector<Vertex> & nextGate ) {
+    cout << "AND size: " << ANDreadyqueue.size() << " OR size: " << ORreadyqueue.size() << " NOT size " << NOTreadyqueue.size() << endl ;
     for ( int i = 0 ; i < gandConstraint ; i ++ ) {
         if ( ANDreadyqueue.size() == 0 ) 
             break ;
@@ -335,7 +340,7 @@ int ListScheduling() {
     unordered_map<Vertex,int> waitingqueue;
     vector<Vertex> nextGate ;
     nextGate.push_back(ghead) ;
-    while( ! finish && cycle < 5 ) {
+    while( ! finish && cycle < 7) {
         cout << "Cycle : " << cycle << endl ;
         if ( ! nextGate.empty() ) { 
             for ( auto i : nextGate ) {
@@ -348,7 +353,7 @@ int ListScheduling() {
                     } // if
 
 
-                    if ( cycle == 0 ) { 
+                    if ( cycle == 0 ) {  // initial when cycle is 0
                         for ( auto inbound : gGateInbound[g[*ai].name]) {
                             // cout << inbound << " test " << gGateStatus[inbound] << endl ;
                             if ( gGateStatus[inbound] )
@@ -359,7 +364,7 @@ int ListScheduling() {
                         waitingqueue[*ai] ++ ;
 
                     if ( waitingqueue[*ai] == gGateInbound[g[*ai].name].size() ) {
-                        AddReadyQueue( *ai ) ;
+                        finish = AddReadyQueue( *ai ) ;
                         cout << "       " << g[*ai].name << " is ready" << endl ;
                     } // if
                     else {
@@ -370,7 +375,6 @@ int ListScheduling() {
             nextGate.clear() ;
         } // if
         else { // no new gate
-
         } // else 
 
         // Change Status
@@ -394,6 +398,8 @@ int ListScheduling() {
         }
         cycle ++ ;
     } // while
+
+    cout << "Perform " << cycle-1 << " cycles" << endl ;
 
     return cycle ;
 } // ListScheduling
