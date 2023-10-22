@@ -27,6 +27,7 @@ int gorConstraint = 0;
 int gnotConstraint = 0;
 string gblifFile ;
 unordered_map<string,int> gCycleRecord ;
+vector<unordered_map<string,vector<string>>> SchedulingResult  ;
 
 
 // Tree
@@ -216,9 +217,7 @@ string analyzeGate(ifstream & file, vector<string> gate) {
     int gate_size = gate.size() ;
     string temp_String = GetaToken(file) ;
     string type ;
-    // cout << temp_String << "\tFirst Gate" << endl ;
     if (temp_String.find('-') != string::npos )  {
-        // cout << "=====OR Gate=====" << endl ;
         type = "OR" ;
         GetaToken(file) ;
         for ( int i = 2 ; i < gate.size() ; i ++ ) {
@@ -227,12 +226,10 @@ string analyzeGate(ifstream & file, vector<string> gate) {
         }
     } // if
     else if ( temp_String.find('0') != string::npos) {
-        // cout << "=====NOT Gate=====" << endl ;
         type = "NOT" ;
         GetaToken(file) ;
     } // else if
     else {
-        // cout << "=====AND Gate=====" << endl ;
         GetaToken(file) ;
         type = "AND" ;
     }
@@ -307,40 +304,43 @@ bool AddReadyQueue( Vertex resource ) {
 
 void PickResource( vector<Vertex> & nextGate ) {
     cout << "AND size: " << ANDreadyqueue.size() << " OR size: " << ORreadyqueue.size() << " NOT size " << NOTreadyqueue.size() << endl ;
+    unordered_map<string,vector<string>> tempmap ;
+    tempmap["AND"] = vector<string>() ;
+    tempmap["OR"] = vector<string>() ;
+    tempmap["NOT"] = vector<string>() ;
     for ( int i = 0 ; i < gandConstraint ; i ++ ) {
         if ( ANDreadyqueue.size() == 0 ) 
             break ;
-        nextGate.push_back(ANDreadyqueue.back()) ;
+        nextGate.push_back(ANDreadyqueue.front()) ;
+        tempmap["AND"].push_back(g[ANDreadyqueue.front()].name) ;
         ANDreadyqueue.pop() ;
     } // for
     for ( int i = 0 ; i < gorConstraint ; i ++ ) {
         if ( ORreadyqueue.size() == 0 ) 
             break ;
-        nextGate.push_back(ORreadyqueue.back()) ;
+        nextGate.push_back(ORreadyqueue.front()) ;
+        tempmap["OR"].push_back(g[ORreadyqueue.front()].name) ;
         ORreadyqueue.pop() ;
     } // for
     for ( int i = 0 ; i < gnotConstraint ; i ++ ) {
         if ( NOTreadyqueue.size() == 0 ) 
             break ;
-        nextGate.push_back(NOTreadyqueue.back()) ;
+        nextGate.push_back(NOTreadyqueue.front()) ;
+        tempmap["NOT"].push_back(g[NOTreadyqueue.front()].name) ;
         NOTreadyqueue.pop() ;
     } // for
 
-
+    SchedulingResult.push_back(tempmap) ;
 } // PickResource
 
 int ListScheduling() {
-    gandConstraint ;
-    gorConstraint ;
-    gnotConstraint ;
-    
     bool finish = false ;
     int cycle = 0 ;
     vector<bool> visited(boost::num_vertices(g), false);
     unordered_map<Vertex,int> waitingqueue;
     vector<Vertex> nextGate ;
     nextGate.push_back(ghead) ;
-    while( ! finish && cycle < 7) {
+    while( ! finish ) {
         cout << "Cycle : " << cycle << endl ;
         if ( ! nextGate.empty() ) { 
             for ( auto i : nextGate ) {
@@ -368,7 +368,7 @@ int ListScheduling() {
                         cout << "       " << g[*ai].name << " is ready" << endl ;
                     } // if
                     else {
-                        cout << "    | " << g[*ai].name << " not enough inbound :" << waitingqueue[*ai] << endl ;
+                        // cout << "    | " << g[*ai].name << " not enough inbound :" << waitingqueue[*ai] << endl ;
                     }
                 } // for
             }
@@ -383,8 +383,9 @@ int ListScheduling() {
 
         // Check how many resource this cycle can use
         // get resource from readyqueue ( 'select' priority )
-        PickResource( nextGate) ;
-
+        if ( ! finish )
+            PickResource( nextGate) ;
+        
         // run 1 cycle
         if ( ! nextGate.empty()) {
             cout << "=== " ;
@@ -400,7 +401,6 @@ int ListScheduling() {
     } // while
 
     cout << "Perform " << cycle-1 << " cycles" << endl ;
-
     return cycle ;
 } // ListScheduling
 
@@ -487,6 +487,29 @@ int main(int argc, char const *argv[])
     vertex_dfs() ;
 
     ListScheduling() ;
+    cout << "Heuristic Scheduling Result" << endl ;
+    for ( int i = 0 ; i < SchedulingResult.size() ; i ++  ) {
+        cout << i+1 << " : {" ;
+
+        for (auto j : SchedulingResult[i]["AND"]) {
+            cout << j ;
+            if ( j != SchedulingResult[i]["AND"].back() )
+                cout << " " ;
+        } // for
+        cout << "} {" ;
+        for (auto j : SchedulingResult[i]["OR"]) {
+            cout << j ;
+            if ( j != SchedulingResult[i]["OR"].back() )
+                cout << " " ;
+        } // for
+        cout << "} {" ;
+        for (auto j : SchedulingResult[i]["NOT"]) {
+            cout << j ;
+            if ( j != SchedulingResult[i]["NOT"].back() )
+                cout << " " ;
+        } // for
+        cout << "}" << endl ;
+    }
     /* code */
     return 0;
 }
