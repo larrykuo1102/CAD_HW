@@ -4,6 +4,7 @@
 # include <string>
 # include <unordered_map>
 # include <boost/graph/adjacency_list.hpp>
+# include <boost/graph/topological_sort.hpp>
 # include <queue>
 # include <functional>
 using namespace std ;
@@ -26,7 +27,9 @@ int gandConstraint = 0;
 int gorConstraint = 0;
 int gnotConstraint = 0;
 string gblifFile ;
-unordered_map<string,int> gCycleRecord ;
+unordered_map<string,int> gHeuristicCycleRecord ;
+unordered_map<string,int> gASAPCycleRecord ;
+unordered_map<string,int> gALAPCycleRecord ;
 vector<unordered_map<string,vector<string>>> SchedulingResult  ;
 
 
@@ -46,6 +49,7 @@ unordered_map<string,bool> gGateStatus ;
 queue<Vertex> ANDreadyqueue ;
 queue<Vertex> ORreadyqueue ;
 queue<Vertex> NOTreadyqueue ;
+queue<Vertex> ASAPreadyqueue ;
 
 void readLabel(ifstream & file) ;
 void analyzeLabel( string type, ifstream & file ) ;
@@ -284,34 +288,41 @@ void buildTree( string type, vector<string> gate ) {
     } // for
 } // buildTree
 
-bool AddReadyQueue( Vertex resource ) {
-    if ( g[resource].type == "AND") {
-        ANDreadyqueue.push(resource) ;
-    } // if
-    else if (g[resource].type == "OR") {
-        ORreadyqueue.push(resource) ;
+bool AddReadyQueue( Vertex resource, string algo ) {
+    if ( algo == "ASAP") {
+        ASAPreadyqueue.push(resource) ;
     }
     else {
+        if (g[resource].type == "AND")
+            ANDreadyqueue.push(resource) ;
+        else if (g[resource].type == "OR")
+            ORreadyqueue.push(resource) ;
+        else 
         NOTreadyqueue.push(resource) ;
     }
-
-    if ( g[resource].name == "tail") {
-        cout << "Finish " << endl ;
+    if ( g[resource].name == "tail") 
         return true ;
-    }
     return false ;
 } // AddReadyQueue
 
-void PickResource( vector<Vertex> & nextGate ) {
-    cout << "AND size: " << ANDreadyqueue.size() << " OR size: " << ORreadyqueue.size() << " NOT size " << NOTreadyqueue.size() << endl ;
+void PickResource( vector<Vertex> & nextGate, string algo, int cycle ) {
     unordered_map<string,vector<string>> tempmap ;
     tempmap["AND"] = vector<string>() ;
     tempmap["OR"] = vector<string>() ;
     tempmap["NOT"] = vector<string>() ;
+    if ( algo == "ASAP" ) {
+        while( ! ASAPreadyqueue.empty()) {
+            nextGate.push_back(ASAPreadyqueue.front()) ;
+            gASAPCycleRecord[g[ASAPreadyqueue.front()].name] = cycle ;
+            ASAPreadyqueue.pop() ;
+        } // while
+    } // if
+    else {
     for ( int i = 0 ; i < gandConstraint ; i ++ ) {
         if ( ANDreadyqueue.size() == 0 ) 
             break ;
         nextGate.push_back(ANDreadyqueue.front()) ;
+            gHeuristicCycleRecord[g[ANDreadyqueue.front()].name] = cycle ;
         tempmap["AND"].push_back(g[ANDreadyqueue.front()].name) ;
         ANDreadyqueue.pop() ;
     } // for
@@ -319,6 +330,7 @@ void PickResource( vector<Vertex> & nextGate ) {
         if ( ORreadyqueue.size() == 0 ) 
             break ;
         nextGate.push_back(ORreadyqueue.front()) ;
+            gHeuristicCycleRecord[g[ORreadyqueue.front()].name] = cycle ;
         tempmap["OR"].push_back(g[ORreadyqueue.front()].name) ;
         ORreadyqueue.pop() ;
     } // for
@@ -326,11 +338,13 @@ void PickResource( vector<Vertex> & nextGate ) {
         if ( NOTreadyqueue.size() == 0 ) 
             break ;
         nextGate.push_back(NOTreadyqueue.front()) ;
+            gHeuristicCycleRecord[g[NOTreadyqueue.front()].name] = cycle ;
         tempmap["NOT"].push_back(g[NOTreadyqueue.front()].name) ;
         NOTreadyqueue.pop() ;
     } // for
 
     SchedulingResult.push_back(tempmap) ;
+    }
 } // PickResource
 
 int ListScheduling() {
@@ -364,7 +378,7 @@ int ListScheduling() {
                         waitingqueue[*ai] ++ ;
 
                     if ( waitingqueue[*ai] == gGateInbound[g[*ai].name].size() ) {
-                        finish = AddReadyQueue( *ai ) ;
+                        finish = AddReadyQueue( *ai, "List" ) ;
                         cout << "       " << g[*ai].name << " is ready" << endl ;
                     } // if
                     else {
@@ -377,14 +391,8 @@ int ListScheduling() {
         else { // no new gate
         } // else 
 
-        // Change Status
-            // Check GateResource Valid from gGateStatus
-            // put ready Gate into readyqueue
-
-        // Check how many resource this cycle can use
-        // get resource from readyqueue ( 'select' priority )
         if ( ! finish )
-            PickResource( nextGate) ;
+            PickResource( nextGate,"List", cycle ) ;
         
         // run 1 cycle
         if ( ! nextGate.empty()) {
@@ -419,12 +427,77 @@ void ILP_Formulation() {
     // 
 } // ILP_Formulation
 
-int ALAP() {
-
-} // ALAP
+void ALAP(int maxTimeStep) {
+    std::vector<Vertex> topological_order;
+    boost::topological_sort(g, std::back_inserter(topological_order));   
+    std::vector<int> alap(boost::num_vertices(g), maxTimeStep);
+    for (auto it = topological_order.begin(); it != topological_order.end(); ++it) {
+        Vertex v = *it;
+        if (boost::out_degree(v, g) == 0 ) {
+            alap[v] = std::numeric_limits<int>::max();
+            gALAPCycleRecord[g[v].name] = maxTimeStep ;
+        } else {
+            int min_successor_alap = maxTimeStep;
+            DirectedGraph::out_edge_iterator ei, ei_end;
+            for (boost::tie(ei, ei_end) = boost::out_edges(v, g); ei != ei_end; ++ei) {
+                Vertex successor = boost::target(*ei, g);
+                
+                min_successor_alap = std::min(min_successor_alap, alap[successor]);
+            }
+            if ( g[v].name != "head")
+                gALAPCycleRecord[g[v].name] = min_successor_alap - 1 ;
+            alap[v] = min_successor_alap - 1; // 減少gate執行的時間
+        }
+    }
+}
 
 int ASAP() {
+    bool finish = false ;
+    int cycle = 0 ;
+    vector<bool> visited(boost::num_vertices(g), false);
+    unordered_map<Vertex,int> waitingqueue;
+    vector<Vertex> nextGate ;
+    nextGate.push_back(ghead) ;
+    while( ! finish ) {
+        cout << "Cycle : " << cycle << endl ;
+        if ( ! nextGate.empty() ) { 
+            for ( auto i : nextGate ) {
+                DirectedGraph::adjacency_iterator ai, ai_end;
+                cout << "  ListScheduling test, Vertex : " << g[i].name << endl ;
+                for (boost::tie(ai, ai_end) = boost::adjacent_vertices(i, g); ai != ai_end; ++ai) {
+                    cout <<"  | " << g[*ai].name << "'s turn" << endl ;
+                    if ( ! waitingqueue[*ai] ) {
+                        waitingqueue[*ai] = 0;
+                    } // if
 
+                    if ( cycle == 0 ) {  // initial when cycle is 0
+                        for ( auto inbound : gGateInbound[g[*ai].name]) {
+                            // cout << inbound << " test " << gGateStatus[inbound] << endl ;
+                            if ( gGateStatus[inbound] )
+                                waitingqueue[*ai] ++ ;
+                        } // for
+                    } // if
+                    else 
+                        waitingqueue[*ai] ++ ;
+
+                    if ( waitingqueue[*ai] == gGateInbound[g[*ai].name].size() ) {
+                        finish = AddReadyQueue( *ai, "ASAP" ) ;
+                        
+                        cout << "       " << g[*ai].name << " is ready" << endl ;
+                    } // if
+                } // for
+            }
+            nextGate.clear() ;
+        } // if
+        else { // no new gate
+        } // else 
+
+        if ( ! finish )
+            PickResource( nextGate, "ASAP", cycle) ;
+        cycle ++ ;
+    } // while
+
+    return cycle ;
 } // ASAP
 
 void vertex_dfs() {
@@ -473,20 +546,7 @@ string ManageOption(int argc, char const *argv[]) {
     return argv[1] ;
 }
 
-int main(int argc, char const *argv[])
-{   
-    cout << "Start" << endl ;
-    string option = ManageOption(argc, argv) ;
-    readFile() ;
-    if ( option == "-h") {
-
-    } // if
-    else if ( option == "-e") {
-
-    }
-    vertex_dfs() ;
-
-    ListScheduling() ;
+void PrintHeuristicResult() {
     cout << "Heuristic Scheduling Result" << endl ;
     for ( int i = 0 ; i < SchedulingResult.size() ; i ++  ) {
         cout << i+1 << " : {" ;
@@ -510,6 +570,71 @@ int main(int argc, char const *argv[])
         } // for
         cout << "}" << endl ;
     }
+}
+
+int main(int argc, char const *argv[])
+{   
+    cout << "Start" << endl ;
+    string option = ManageOption(argc, argv) ;
+    readFile() ;
+    if ( option == "-h") {
+
+    } // if
+    else if ( option == "-e") {
+
+    }
+    vertex_dfs() ;
+
+    ListScheduling() ;
+    cout << "==============Heuristic Result==============" << endl ;
+    PrintHeuristicResult() ;
+    vector<pair<string, int>> heurvector(gHeuristicCycleRecord.begin(), gHeuristicCycleRecord.end());
+    sort(heurvector.begin(), heurvector.end(), [](const pair<string, int>& a, const pair<string, int>& b) {
+        return a.second < b.second;
+    });
+    int temp = 0 ;
+    for (auto i : heurvector) {
+        if ( temp != i.second ) {
+            cout << endl << i.first << " " << i.second << " " ;
+            temp = i.second ;
+        }
+        else 
+            cout << i.first << " " << i.second << " " ;
+    }
+    cout << "\n====================ASAP====================" << endl ;
+    ASAP() ;
+    vector<pair<string, int>> ASAPvector(gASAPCycleRecord.begin(), gASAPCycleRecord.end());
+    sort(ASAPvector.begin(), ASAPvector.end(), [](const pair<string, int>& a, const pair<string, int>& b) {
+        return a.second < b.second;
+    });
+    temp = 0 ;
+    for (auto i : ASAPvector) {
+        if ( temp != i.second ) {
+            cout << endl << i.first << " " << i.second << " " ;
+            temp = i.second ;
+        }
+        else 
+            cout << i.first << " " << i.second << " " ;
+    }
+    cout << "\n====================ALAP====================" << endl ;
+
+    ALAP(SchedulingResult.size()-1) ;
+    vector<pair<string, int>> ALAPvector(gALAPCycleRecord.begin(), gALAPCycleRecord.end());
+    sort(ALAPvector.begin(), ALAPvector.end(), [](const pair<string, int>& a, const pair<string, int>& b) {
+        return a.second < b.second;
+    });
+    temp = 0 ;
+    for (auto i : ALAPvector) {
+        if ( temp != i.second ) {
+            cout << endl << i.first << " " << i.second << " " ;
+            temp = i.second ;
+        }
+        else 
+            cout << i.first << " " << i.second << " " ;
+    }
+
+    cout << "\n===============ILP Formulation==============" << endl ;
+    ILP_Formulation() ;
     /* code */
     return 0;
 }
