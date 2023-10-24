@@ -30,6 +30,7 @@ string gblifFile ;
 unordered_map<string,int> gHeuristicCycleRecord ;
 unordered_map<string,int> gASAPCycleRecord ;
 unordered_map<string,int> gALAPCycleRecord ;
+unordered_map<string,int> gSLACK ;
 vector<unordered_map<string,vector<string>>> SchedulingResult  ;
 
 
@@ -298,7 +299,7 @@ bool AddReadyQueue( Vertex resource, string algo ) {
         else if (g[resource].type == "OR")
             ORreadyqueue.push(resource) ;
         else 
-        NOTreadyqueue.push(resource) ;
+            NOTreadyqueue.push(resource) ;
     }
     if ( g[resource].name == "tail") 
         return true ;
@@ -318,32 +319,32 @@ void PickResource( vector<Vertex> & nextGate, string algo, int cycle ) {
         } // while
     } // if
     else {
-    for ( int i = 0 ; i < gandConstraint ; i ++ ) {
-        if ( ANDreadyqueue.size() == 0 ) 
-            break ;
-        nextGate.push_back(ANDreadyqueue.front()) ;
+        for ( int i = 0 ; i < gandConstraint ; i ++ ) {
+            if ( ANDreadyqueue.size() == 0 ) 
+                break ;
+            nextGate.push_back(ANDreadyqueue.front()) ;
             gHeuristicCycleRecord[g[ANDreadyqueue.front()].name] = cycle ;
-        tempmap["AND"].push_back(g[ANDreadyqueue.front()].name) ;
-        ANDreadyqueue.pop() ;
-    } // for
-    for ( int i = 0 ; i < gorConstraint ; i ++ ) {
-        if ( ORreadyqueue.size() == 0 ) 
-            break ;
-        nextGate.push_back(ORreadyqueue.front()) ;
+            tempmap["AND"].push_back(g[ANDreadyqueue.front()].name) ;
+            ANDreadyqueue.pop() ;
+        } // for
+        for ( int i = 0 ; i < gorConstraint ; i ++ ) {
+            if ( ORreadyqueue.size() == 0 ) 
+                break ;
+            nextGate.push_back(ORreadyqueue.front()) ;
             gHeuristicCycleRecord[g[ORreadyqueue.front()].name] = cycle ;
-        tempmap["OR"].push_back(g[ORreadyqueue.front()].name) ;
-        ORreadyqueue.pop() ;
-    } // for
-    for ( int i = 0 ; i < gnotConstraint ; i ++ ) {
-        if ( NOTreadyqueue.size() == 0 ) 
-            break ;
-        nextGate.push_back(NOTreadyqueue.front()) ;
+            tempmap["OR"].push_back(g[ORreadyqueue.front()].name) ;
+            ORreadyqueue.pop() ;
+        } // for
+        for ( int i = 0 ; i < gnotConstraint ; i ++ ) {
+            if ( NOTreadyqueue.size() == 0 ) 
+                break ;
+            nextGate.push_back(NOTreadyqueue.front()) ;
             gHeuristicCycleRecord[g[NOTreadyqueue.front()].name] = cycle ;
-        tempmap["NOT"].push_back(g[NOTreadyqueue.front()].name) ;
-        NOTreadyqueue.pop() ;
-    } // for
-
-    SchedulingResult.push_back(tempmap) ;
+            tempmap["NOT"].push_back(g[NOTreadyqueue.front()].name) ;
+            NOTreadyqueue.pop() ;
+        } // for
+        
+        SchedulingResult.push_back(tempmap) ;
     }
 } // PickResource
 
@@ -412,19 +413,82 @@ int ListScheduling() {
     return cycle ;
 } // ListScheduling
 
+void CalculateSLAP() {
+    for ( auto i : gASAPCycleRecord ) {
+        gSLACK[i.first] = gALAPCycleRecord[i.first] - i.second ;
+    } // for
+} // CalculateSLAP
 
-int ILPSolver() {
 
-} // ILPSolver
+void ILP_Formulation( int lamb ) {
+    CalculateSLAP() ;
+    vector<pair<string, int>> SLACKvector(gSLACK.begin(), gSLACK.end());
+    sort(SLACKvector.begin(), SLACKvector.end(), [](const pair<string, int>& a, const pair<string, int>& b) {
+        return a.second < b.second;
+    });
+    int temp = 0 ;
+    for (auto i : SLACKvector) {
+        if ( temp != i.second ) {
+            cout << endl << i.first << " " << i.second << " " ;
+            temp = i.second ;
+        }
+        else 
+            cout << i.first << " " << i.second << " " ;
+    }
+    cout << "\n===============================================\n" ;
+    ofstream outputFile( gblifFile + ".lp");
+    string goal, subjectTo, bounds, general  ;
+    goal += "Minimize\n" ; 
+    for ( int i = 1 ; i <= gSLACK["tail"]+1 ; i ++ ) {
+        if ( i != 1 )
+            goal += " +" ;
+        goal += " " + to_string(i+gASAPCycleRecord["tail"]) + " tail" + to_string(i+gASAPCycleRecord["tail"]) ;
+    }// for
 
-void ILP_Formulation() {
+
+    subjectTo += "Subject To\n" ;
     // Unique start times
+    for ( auto i : SLACKvector ) {
+        if ( i.first == "head")
+            continue ;
+        if ( gSLACK[i.first] == 0 ) {
+            subjectTo += " " + i.first + to_string(gASAPCycleRecord[i.first] ) + " = 1\n" ;
+        } // if
+        else { // slack > 0
+            for ( int j = 1 ; j <= gSLACK[i.first]+1 ; j ++ ) {
+                subjectTo += " " + i.first + to_string( gASAPCycleRecord[i.first] + j ) ;
+                if ( j + 1 <= gSLACK[i.first] + 1 )
+                    subjectTo += " + " ;
+            } // for
+
+            subjectTo += " = 1\n" ;
+        } // else
+
+    } // for
 
     // Sequencing
-
+    
     // Resource constraints
 
+    general += "Binary\n" ;
+    for ( auto i : gGateVertex ) {
+        if ( i.first != "head" ) {
+            for ( int j = 1 ; j < lamb ; j ++ ) {
+                general += i.first + to_string(j) + "\n" ;
+            } // for
+        } // if
+        // else if ( i.first == "tail" ) {
+        //     for ( int j = 1 ; j <= lamb ; j ++ ) {
+        //         general += "" + to_string(j) + "\n" ;
+        //     } // for
+        // }
+    }
     // 
+
+
+    outputFile << goal << endl << subjectTo << general ;
+
+    outputFile.close() ;
 } // ILP_Formulation
 
 void ALAP(int maxTimeStep) {
@@ -494,11 +558,19 @@ int ASAP() {
 
         if ( ! finish )
             PickResource( nextGate, "ASAP", cycle) ;
+        else if ( finish ) {
+            gASAPCycleRecord[g[ASAPreadyqueue.front()].name] = cycle ;
+        }
         cycle ++ ;
     } // while
 
     return cycle ;
 } // ASAP
+
+
+int ILPSolver() {
+    
+} // ILPSolver
 
 void vertex_dfs() {
     cout << "Vertex_dfs : " << endl ;
@@ -618,7 +690,7 @@ int main(int argc, char const *argv[])
     }
     cout << "\n====================ALAP====================" << endl ;
 
-    ALAP(SchedulingResult.size()-1) ;
+    ALAP(SchedulingResult.size()) ;
     vector<pair<string, int>> ALAPvector(gALAPCycleRecord.begin(), gALAPCycleRecord.end());
     sort(ALAPvector.begin(), ALAPvector.end(), [](const pair<string, int>& a, const pair<string, int>& b) {
         return a.second < b.second;
@@ -634,7 +706,7 @@ int main(int argc, char const *argv[])
     }
 
     cout << "\n===============ILP Formulation==============" << endl ;
-    ILP_Formulation() ;
+    ILP_Formulation(SchedulingResult.size()+1) ;
     /* code */
     return 0;
 }
