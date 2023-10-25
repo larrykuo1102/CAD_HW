@@ -7,6 +7,7 @@
 # include <boost/graph/topological_sort.hpp>
 # include <queue>
 # include <functional>
+# include <algorithm>
 using namespace std ;
 
 struct VertexProperty {
@@ -421,8 +422,13 @@ void CalculateSLAP() {
 
 
 void ILP_Formulation( int lamb ) {
+    ofstream outputFile( gblifFile + ".lp");
+    string goal, subjectTo, bounds, general, sequencing, resourceCstring ;
     CalculateSLAP() ;
     vector<pair<string, int>> SLACKvector(gSLACK.begin(), gSLACK.end());
+
+    vector<unordered_map<string,vector<string>>> resourceContraints(lamb,unordered_map<string,vector<string>>(
+        {{"AND",vector<string>()},{"OR",vector<string>()},{"NOT",vector<string>()}})) ;
     sort(SLACKvector.begin(), SLACKvector.end(), [](const pair<string, int>& a, const pair<string, int>& b) {
         return a.second < b.second;
     });
@@ -436,13 +442,11 @@ void ILP_Formulation( int lamb ) {
             cout << i.first << " " << i.second << " " ;
     }
     cout << "\n===============================================\n" ;
-    ofstream outputFile( gblifFile + ".lp");
-    string goal, subjectTo, bounds, general  ;
     goal += "Minimize\n" ; 
     for ( int i = 1 ; i <= gSLACK["tail"]+1 ; i ++ ) {
         if ( i != 1 )
             goal += " +" ;
-        goal += " " + to_string(i+gASAPCycleRecord["tail"]) + " tail" + to_string(i+gASAPCycleRecord["tail"]) ;
+        goal += " " + to_string(i+gASAPCycleRecord["tail"]) + " tail," + to_string(i+gASAPCycleRecord["tail"]) ;
     }// for
 
 
@@ -452,13 +456,17 @@ void ILP_Formulation( int lamb ) {
         if ( i.first == "head")
             continue ;
         if ( gSLACK[i.first] == 0 ) {
-            subjectTo += " " + i.first + to_string(gASAPCycleRecord[i.first] ) + " = 1\n" ;
+            string startgate = i.first + "," + to_string(gASAPCycleRecord[i.first] ) ; 
+            subjectTo += startgate  + " = 1\n" ;
+            resourceContraints[gASAPCycleRecord[i.first]-1][g[gGateVertex[i.first]].type].push_back( startgate ) ;
         } // if
         else { // slack > 0
             for ( int j = 1 ; j <= gSLACK[i.first]+1 ; j ++ ) {
-                subjectTo += " " + i.first + to_string( gASAPCycleRecord[i.first] + j ) ;
+                string startgate = i.first + "," + to_string( gASAPCycleRecord[i.first] + j ) ;
+                resourceContraints[gASAPCycleRecord[i.first]+j-1][g[gGateVertex[i.first]].type].push_back( startgate ) ;
+                subjectTo += " " +  startgate ;
                 if ( j + 1 <= gSLACK[i.first] + 1 )
-                    subjectTo += " + " ;
+                    subjectTo += " +" ;
             } // for
 
             subjectTo += " = 1\n" ;
@@ -467,27 +475,81 @@ void ILP_Formulation( int lamb ) {
     } // for
 
     // Sequencing
-    
+    for ( auto i : gGateInbound ) {
+        if ( gSLACK[i.first] == 0 )
+            continue;
+        for ( auto j : i.second ) {
+            if ( ! gGateStatus[j] ) { 
+                if ( gSLACK[j] == 0 )
+                    continue;
+                if ( gSLACK[j] > 0 ) {
+                    sequencing += " " ;
+                    for ( int k = 0 ; k <= gSLACK[i.first] ; k ++ ) {
+                        sequencing += to_string(k+gASAPCycleRecord[i.first]+1) + " " + i.first + "," + to_string(k+gASAPCycleRecord[i.first]+1) ;
+                        if ( k + 1 <= gSLACK[i.first] ) 
+                            sequencing += " + " ;
+                        else 
+                            sequencing += " - " ;
+                    } // for
+                    for ( int k = 0 ; k <= gSLACK[j] ; k ++ ) {
+                        sequencing += to_string(k+gASAPCycleRecord[j]+1) + " " + j + "," + to_string(k+gASAPCycleRecord[j]+1) ;
+                        if ( k + 1 <= gSLACK[j] ) 
+                            sequencing += " - " ;
+                        else
+                            sequencing += " >= 1\n" ;
+                    
+                    } // for
+                } // if
+            } // if
+            else {
+                continue;
+            } // else
+        } // 
+    } // for
+    subjectTo += sequencing ;
     // Resource constraints
+    for ( auto i : resourceContraints ) {
+        for ( auto j : i ) {
+            bool valid = false ;
+            if ( j.first == "AND" && gandConstraint < j.second.size() ) 
+                valid = true ;
+            if ( j.first == "OR" && gorConstraint < j.second.size() ) 
+                valid = true ;
+            if ( j.first == "NOT" && gnotConstraint < j.second.size() ) 
+                valid = true ;
+            
+            if ( j.first != "NOP" && valid ) {
+                resourceCstring += " " ;
+                for ( auto k : j.second ) {
+                    resourceCstring += k  ;
+                    if ( k != j.second.back())
+                        resourceCstring += " + " ;
+                }  // for
+            } // if
 
+            if ( j.first == "AND" && valid ) 
+                resourceCstring += " <= " + to_string(gandConstraint) ;
+            if ( j.first == "OR" && valid ) 
+                resourceCstring += " <= " + to_string(gorConstraint) ;
+            if ( j.first == "NOT" && valid ) 
+                resourceCstring += " <= " + to_string(gnotConstraint) ;
+            if (valid)
+                resourceCstring += "\n" ;
+        } // for
+
+    } // for
+    subjectTo += resourceCstring ;
     general += "Binary\n" ;
-    for ( auto i : gGateVertex ) {
-        if ( i.first != "head" ) {
-            for ( int j = 1 ; j < lamb ; j ++ ) {
-                general += i.first + to_string(j) + "\n" ;
-            } // for
-        } // if
-        // else if ( i.first == "tail" ) {
-        //     for ( int j = 1 ; j <= lamb ; j ++ ) {
-        //         general += "" + to_string(j) + "\n" ;
-        //     } // for
-        // }
-    }
-    // 
+    for ( auto i : SLACKvector ) {
+        if ( i.first == "head")
+            continue ;
+        else {
+            for ( int j = 0 ; j <= gSLACK[i.first] ; j ++ ) 
+                general += " " + i.first + "," + to_string(j+gASAPCycleRecord[i.first]+1) + "\n" ;
+        }
+    } // for
 
-
-    outputFile << goal << endl << subjectTo << general ;
-
+    outputFile << goal << endl << subjectTo  << general ;
     outputFile.close() ;
 } // ILP_Formulation
 
@@ -568,8 +630,23 @@ int ASAP() {
 } // ASAP
 
 
-int ILPSolver() {
-    
+int ILPSolver( int heuristicCycle ) {
+    ILP_Formulation( heuristicCycle ) ;
+    string filename = gblifFile + ".lp" ;
+    string command = "gurobi_cl ResultFile=./ILPsolver.sol " + filename ;
+    system(command.c_str());
+    ifstream inputFile( "./ILPsolver.sol" ) ;
+    vector<string> result ;
+    string templine, gate, choice ;
+    getline( inputFile, templine) ;
+    while( ! inputFile.eof()) {
+        inputFile >> gate >> choice ;
+        if ( choice == "1" )
+            result.push_back( gate ) ;
+    } // while
+    for ( int i = 0 ; i < result.size() ; i ++ ) {
+        cout << result[i] << endl ; ;
+    }
 } // ILPSolver
 
 void vertex_dfs() {
@@ -706,7 +783,7 @@ int main(int argc, char const *argv[])
     }
 
     cout << "\n===============ILP Formulation==============" << endl ;
-    ILP_Formulation(SchedulingResult.size()+1) ;
+    ILPSolver(SchedulingResult.size()+1) ;
     /* code */
     return 0;
 }
