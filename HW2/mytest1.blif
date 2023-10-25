@@ -1,0 +1,39 @@
+.model mytest
+.inputs a b c d e f g 
+.outputs o1 o2 o3 o4
+.names a c d o1
+1-- 1
+-1- 1
+--1 1
+.names b c h3
+1- 1
+-1 1
+.names b c h3 h2
+111 1
+.names f h4
+0 1
+.names e h4 h6
+11 1
+.names g h6 h7
+1- 1
+-1 1
+.names h1 h2 h3 o1 
+1-- 1
+-1- 1
+--1 1
+.names h6 h7 o2
+11 1
+.names h5 o3
+0 1
+.names h2 h7 o4
+11 1
+.names f g h5
+1- 1
+-1 1
+.names h2 h3 h4 h8
+1-- 1
+-1- 1
+--1 1
+.names h1 h8 o1
+11 1
+.end
