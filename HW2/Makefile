@@ -1,7 +1,7 @@
 build :
 	g++ -std=c++11 ./M11115046.cpp -o mlrcs
 run:
-	./mlrcs -e mytest1.blif 2 1 1
+	./mlrcs -e aoi_benchmark/aoi_sample02.blif 2 1 1
 
 install :
 	sudo apt install libboost-all-dev
