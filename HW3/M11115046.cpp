@@ -4,19 +4,20 @@
 # include <string>
 # include <unordered_map>
 # include <set>
+# include <unordered_set>
 using namespace std ;
 
 
 struct ProductTerm {
     string output ;
-    vector<vector<string>> AllMinterms ;
+    vector<set<string>> Cubes ;
 } ;
 
 string gModelName ;
 string gNewToken ;
 string gblifFile ;
-set<string> gInputs ;
-set<string> gOutputs ;
+vector<string> gInputs ;
+vector<string> gOutputs ;
 
 vector<ProductTerm> gAllGateProductTerms ;
 
@@ -26,7 +27,7 @@ string ReadaToken( ifstream & file ) ;
 string PeekaToken(ifstream & file) ;
 bool IsNumber( char ch ) ;
 void readLabel(ifstream & file) ;
-set<string> readGate(ifstream & file ) ;
+vector<string> readGate(ifstream & file ) ;
 void analyzeLabel( string type, ifstream & file ) ;
 vector<string> readNameGate(ifstream & file ) ;
 void analyzeGate(ifstream & file, vector<string> gate) ;
@@ -114,7 +115,6 @@ void analyzeLabel( string type, ifstream & file ) {
     }
     else if ( type == ".outputs") {
         gOutputs = readGate(file) ;
-
     }
     else if ( type == ".names") {
 
@@ -122,7 +122,6 @@ void analyzeLabel( string type, ifstream & file ) {
         for ( auto i : vectorName ) {
         }
         // cout << endl ;
-        cout << ".names" << endl ;
         analyzeGate(file,vectorName) ;
     }
     else if ( type == ".end") {
@@ -143,13 +142,13 @@ vector<string> readNameGate(ifstream & file ) {
     return temp ;
 } // readNameGate
 
-set<string> readGate(ifstream & file ) {
-    set<string> temp ;
+vector<string> readGate(ifstream & file ) {
+    vector<string> temp ;
     string temp_string ;
     temp_string = PeekaToken(file) ;
     while( ! temp_string.empty() && temp_string[0] != '.' && ! IsNumber(temp_string[0]) ) {
         temp_string = GetaToken( file ) ;
-        temp.insert(temp_string) ;
+        temp.push_back(temp_string) ;
         temp_string = PeekaToken(file) ;
     }
     return temp ;
@@ -177,7 +176,7 @@ void analyzeGate(ifstream & file, vector<string> gate) {
             }
         }
 
-        tempProductTerm.AllMinterms.push_back( vector<string>( minterm.begin(), minterm.end() ) ) ;
+        tempProductTerm.Cubes.push_back( set<string>( minterm.begin(), minterm.end() ) ) ;
         minterm.clear() ;
         GetaToken(file) ; // read output value
         temp_String = PeekaToken(file) ;
@@ -187,17 +186,239 @@ void analyzeGate(ifstream & file, vector<string> gate) {
 }
 
 
-void Cube() {
+vector<set<string>> CUBES( vector<set<string>> cubes, string Xi ) {
+    vector<set<string>> result ;
+    if ( Xi[0] == 'Y' )
+        return result ;
+    for ( auto cube : cubes ) {
+        if ( cube.find( Xi ) != cube.end() ) { // 有找到Xi[0]的就加入 result
+            result.push_back( set<string>(cube.begin(),cube.end())) ;
+        } // if
+    } // for
+    
+    return result ;
+}
 
-} //
+set<string> CUBES_MAX(  vector<set<string>> cubes , string Xi ) {
+    int size = cubes.size() ;
+    int count_cube = 0 ;
+    set<string> result ;
+    result.insert(Xi) ;
+    for ( auto i : cubes[0]) {
+        if ( i != Xi ) {
+            for ( auto cube : cubes ) {
+                if ( cube.find( i ) != cube.end() ) {
+                    count_cube ++ ;
+                } // if
+                else {
+                    break ;
+                }
+            } // for
 
-void Kernel() {
+            if ( count_cube == size )
+                result.insert( i ) ;
 
+            count_cube = 0 ;
+        } // if
+    }
+
+    return result ;
+} // CUBES_MAX
+
+vector<set<string>> cubesDivideC( vector<set<string>> cubes , set<string> Xi ) {
+    for ( auto i : Xi ) {
+        for ( int j = 0 ; j < cubes.size() ; j ++ ) {
+            if ( cubes[j].find(i) == cubes[j].end() ) {
+                cubes.erase( cubes.begin() + j ) ;
+                j -- ;
+            } // if
+        } // for
+    } // for
+
+    for ( int i = 0 ; i < cubes.size() ; i ++ ) {
+        for ( auto j : Xi )
+            cubes[i].erase(j) ;
+    }
+    return cubes ;
+} // cubesDivideC
+
+bool ExistBeforeLiteral( vector<string> allliteral, int index, set<string> Xi ) {
+    for ( int i = 0 ; i < index ; i ++ ) {
+        if ( Xi.find(allliteral[i]) != Xi.end() ) {
+            return false ;
+        } // if
+    } // for
+
+    return true ;
+} // ExistBeforeLiteral
+
+void Kernel( vector<set<string>> cubes, vector<string> allliteral,  int index, vector<vector<set<string>>> & K,  vector<set<string>> & coK ) {
+    int  allliteral_size = allliteral.size() ;
+    vector<set<string>> newkernel ;
+    set<string> C ;
+    for ( int i = index ; i < allliteral_size ; i ++ ) {
+        if ( CUBES( cubes, allliteral[i] ).size() >= 2 ) {
+            C = CUBES_MAX( cubes, allliteral[i]) ;
+
+            if ( ExistBeforeLiteral( allliteral, i, C ) ) {
+                newkernel = cubesDivideC(cubes, C ) ;
+                Kernel( newkernel, allliteral, i+1, K, coK) ;
+            }
+        }
+    } // for
+
+    K.push_back( cubes ) ;
+    coK.push_back( C ) ;
 } // Kernel
 
-void Divide() {
+vector<string> GetAllliteral( vector<set<string>> cubes ) {
+    set<string> all_set ;
+    for ( auto cube : cubes ) {
+        for ( auto i : cube ) {
+            all_set.insert( i ) ;
+        } // for    
+    } // for
+
+    return vector<string>( all_set.begin(), all_set.end() ) ;
+} //
+
+void Divide( vector<string> cube, vector<set<string>> dividend ) {
 
 } // 
+
+vector<set<string>> PickHighestYK( vector<vector<set<string>>> Kernel ) {
+    int max_index = 0 ;
+    int max = -1 ;
+
+    // for ( auto eachKernelCubes : Kernel) {
+    for ( int i = 0 ; i < Kernel.size() ; i ++ ) {
+        set<string> tempset ;
+        for ( auto cube : Kernel[i] ) {
+            for (auto rit = cube.rbegin(); rit != cube.rend(); ++rit) {
+                string tempstring = *rit ;
+                if ( tempstring[0] == 'Y' ) {
+                    tempset.insert(tempstring) ;
+                    break ;
+                } 
+            }
+        } // for
+        if( int(tempset.size()) > max ) {
+            max_index = i ;
+            max = tempset.size() ;
+        }
+    }
+
+
+    cout << "Maxindex " << max_index << " " << max << endl ;
+    return Kernel[max_index] ;
+} // 
+
+void runMultipleCubeExtraction() {
+    vector<vector<vector<set<string>>>> eachProducttermsKernel ;
+    for ( int i = 0 ; i < gAllGateProductTerms.size() ; i ++ ) {
+    // for ( int i = 2 ; i < 3 ; i ++ ) {
+        vector<vector<set<string>>> tempKernel ;
+        vector<set<string>> tempCoKernel ;
+        vector<string> tempLiteral = GetAllliteral(gAllGateProductTerms[i].Cubes) ;
+        Kernel( gAllGateProductTerms[i].Cubes, tempLiteral, 0, tempKernel, tempCoKernel ) ;
+        eachProducttermsKernel.push_back(tempKernel) ;
+    } // for
+    // return ;
+    // for (  int i = 0 ; i < eachProducttermsKernel.size() ; i ++ ) {
+    // // for (  int i = 0 ; i < 1 ; i ++ ) {
+    //     cout << "=====" << i << "=====" << endl ;
+    //     for ( auto eachKernelCubes : eachProducttermsKernel[i]) {
+    //         cout << "{" ;
+
+    //         for ( auto cube : eachKernelCubes ) {
+    //             for ( auto i : cube ) {
+    //                 cout << i ;
+    //             } // for
+
+    //             if ( cube != eachKernelCubes.back() )
+    //                 cout << " + "  ;
+    //         } // for
+
+    //         cout << "}" << endl ;
+    //     } // for
+    // } // for
+
+    // return ;
+    vector<set<string>> auxCube ;
+
+    for ( int i = 0 ; i < eachProducttermsKernel.size() ; i ++ ) { // 不同gate
+        string NewTag = "Y" + to_string(i) ;
+        // tempset.insert(NewTag) ;
+        
+        for ( auto eachKernelCubes : eachProducttermsKernel[i] ) { // 有很多kernel
+            set<string> tempset ;
+            tempset.insert(NewTag) ;
+            for ( auto KernelCube : eachKernelCubes ) { // 每一個kernel裡面的productterm
+                string tempstring = "X" ;
+                for ( auto term : KernelCube ) // productterm
+                    tempstring += term ;
+                
+                tempset.insert( tempstring ) ;
+            } // for
+            
+            auxCube.push_back( tempset ) ;  
+        } // for
+    } // for    
+
+    // for ( auto cube : auxCube ) {
+    //     for ( auto i : cube ) {
+    //         cout << i ;
+    //     } // for
+
+    //     if ( cube != auxCube.back() )
+    //         cout << " + " << endl  ;
+    // } // for
+    // cout << endl ;
+
+    vector<vector<set<string>>> tempKernel ;
+    vector<set<string>> tempCoKernel ;
+    vector<string> tempLiteral = GetAllliteral(auxCube) ;
+    Kernel( auxCube, tempLiteral, 0, tempKernel, tempCoKernel ) ;
+
+    // for ( auto eachKernelCubes : tempKernel) {
+    //         cout << "{" ;
+
+    //         for ( auto cube : eachKernelCubes ) {
+    //             for ( auto i : cube ) {
+    //                 cout << i ;
+    //             } // for
+
+    //             if ( cube.size() != 0 && cube != eachKernelCubes.back() )
+    //                 cout << " + "  ;
+    //         } // for
+
+    //         cout << "}" << endl ;
+    // }
+
+
+    // cout << "{" ;
+
+    // for ( auto cube : tempCoKernel ) {
+    //     for ( auto i : cube ) {
+    //         cout << i << " " ;
+    //     } // for
+
+    //     if ( cube.size() != 0  )
+    //         cout <<  " + \n"  ;
+    // } // for
+
+    // cout << "}" << endl ;
+    vector<set<string>> destinateCok = PickHighestYK(tempKernel);
+    for ( auto cube : destinateCok ) {
+        for ( auto i : cube ) {
+            cout << i << " " ;
+        } // for
+
+        if ( cube.size() != 0  )
+            cout <<  " + \n"  ;
+    } // for
+    cout << endl ;
+} // runMultipleCubeExtraction
 
 void ManageOption(int argc, char const *argv[]) {  
     if (argc != 2) {
@@ -210,17 +431,18 @@ void ManageOption(int argc, char const *argv[]) {
 
 void PrintSumofProduct() {
 
-    for ( auto gAllMinterms : gAllGateProductTerms ) {
-        for ( auto Minterms : gAllMinterms.AllMinterms ) {
-            for ( auto each : Minterms ) {
+    for ( auto AllMinterms : gAllGateProductTerms ) {
+        cout  << AllMinterms.output << " = " ;
+        for ( auto cube : AllMinterms.Cubes ) {
+            for ( auto each : cube ) {
                 cout << each ;
             }
 
-            if ( Minterms != gAllMinterms.AllMinterms.back())
+            if ( cube != AllMinterms.Cubes.back())
                 cout << " + " ;
         }
 
-        cout << " = " << gAllMinterms.output << endl ;
+        cout <<  endl ;
     }
 
 }
@@ -230,5 +452,59 @@ int main(int argc, char const *argv[])
     ManageOption(argc, argv) ;
     readFile() ;
     PrintSumofProduct() ;
+
+    runMultipleCubeExtraction() ;
+
     return 0;
 }
+
+/*
+multiple cube extraction{
+    先把每一個sumofproduct 去做kernel演算法 並且拿到kernel K() CoK()也要留
+
+    將每一個Kernel的值變成一個變數再做成一個productterm 並乘上自己的label
+
+    把新做的productterm全部or在一起 並且做一次kernel演算法得到 K() CoK()
+
+}
+
+f = vector<vector<string>> 
+kernels ( f, j, coKernel ) {
+    k = vector<vector<vector<string>>>
+    for i to n {
+        if CUBES(f,Xi).size() >= 2 {
+            C = cubes_max( f, xi )
+
+            temp = kernels( f/C, i + 1) ;
+            coKernel.push_back( C ) ;
+            k.push_back( temp ) ;
+        }
+    }
+
+}
+
+CUBES( vector<set<string>>  f, xi ) {
+
+    result = for each in f,  each contain xi 
+
+
+    return vector<set<string>>  ;
+}
+
+cubes_max( f / Xi) {
+    result = for each in f,  each contain xi 
+}
+
+substition( gAllGateProductTerms,  kernels ) {
+    for kernel in kernels :
+        for each in gAllGateProductTerms :
+            if kernel in each :
+                取代
+                new 新的gate
+}
+
+division () {
+
+}
+
+*/
