@@ -286,7 +286,11 @@ void Divide( vector<string> cube, vector<set<string>> dividend ) {
 
 } // 
 
-vector<set<string>> PickHighestYK( vector<vector<set<string>>> Kernel ) {
+void Subtition( ) {
+
+} // Subtition
+
+int PickHighestYK( vector<vector<set<string>>> Kernel ) {
     int max_index = 0 ;
     int max = -1 ;
 
@@ -308,9 +312,8 @@ vector<set<string>> PickHighestYK( vector<vector<set<string>>> Kernel ) {
         }
     }
 
-
     cout << "Maxindex " << max_index << " " << max << endl ;
-    return Kernel[max_index] ;
+    return max_index ;
 } // 
 
 void runMultipleCubeExtraction() {
@@ -323,27 +326,7 @@ void runMultipleCubeExtraction() {
         Kernel( gAllGateProductTerms[i].Cubes, tempLiteral, 0, tempKernel, tempCoKernel ) ;
         eachProducttermsKernel.push_back(tempKernel) ;
     } // for
-    // return ;
-    // for (  int i = 0 ; i < eachProducttermsKernel.size() ; i ++ ) {
-    // // for (  int i = 0 ; i < 1 ; i ++ ) {
-    //     cout << "=====" << i << "=====" << endl ;
-    //     for ( auto eachKernelCubes : eachProducttermsKernel[i]) {
-    //         cout << "{" ;
 
-    //         for ( auto cube : eachKernelCubes ) {
-    //             for ( auto i : cube ) {
-    //                 cout << i ;
-    //             } // for
-
-    //             if ( cube != eachKernelCubes.back() )
-    //                 cout << " + "  ;
-    //         } // for
-
-    //         cout << "}" << endl ;
-    //     } // for
-    // } // for
-
-    // return ;
     vector<set<string>> auxCube ;
 
     for ( int i = 0 ; i < eachProducttermsKernel.size() ; i ++ ) { // 不同gate
@@ -408,16 +391,15 @@ void runMultipleCubeExtraction() {
     // } // for
 
     // cout << "}" << endl ;
-    vector<set<string>> destinateCok = PickHighestYK(tempKernel);
-    for ( auto cube : destinateCok ) {
-        for ( auto i : cube ) {
-            cout << i << " " ;
-        } // for
-
-        if ( cube.size() != 0  )
-            cout <<  " + \n"  ;
-    } // for
+    int destinateCok = PickHighestYK(tempKernel) ; 
+    for ( auto i : tempCoKernel[destinateCok] ) { // 這就是CoKernel 
+        i.erase(i.begin()) ;
+        cout << i ;
+    } 
     cout << endl ;
+
+    // 把CoKernel 裡面的X 刪掉並且轉成 vector<set<string>> 的形式
+    // substition
 } // runMultipleCubeExtraction
 
 void ManageOption(int argc, char const *argv[]) {  
@@ -452,8 +434,9 @@ int main(int argc, char const *argv[])
     ManageOption(argc, argv) ;
     readFile() ;
     PrintSumofProduct() ;
-
-    runMultipleCubeExtraction() ;
+    for ( int i = 0 ; i < 10 ; i ++ ) {
+        runMultipleCubeExtraction() ;
+    }
 
     return 0;
 }
