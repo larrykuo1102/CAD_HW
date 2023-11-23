@@ -1,5 +1,6 @@
 # include <iostream>
 # include <fstream>
+#include <sstream>
 # include <vector>
 # include <string>
 # include <unordered_map>
@@ -280,39 +281,160 @@ vector<string> GetAllliteral( vector<set<string>> cubes ) {
     } // for
 
     return vector<string>( all_set.begin(), all_set.end() ) ;
-} //
+} // GetAllliteral
 
-void Divide( vector<string> cube, vector<set<string>> dividend ) {
+vector<set<string>> IntersactionCube( vector<set<string>> A, vector<set<string>> B ){
+    vector<set<string>> result ;
+    for ( int i = 0 ; i < A.size() ; i ++ ) {
+        for ( int j = 0 ; j < B.size() ; j ++ ) {
+            if ( A[i] == B[j]) {
+                result.push_back(B[j]) ;
+                break ;
+            }
+        } // for
+    } // for
+    return result ;
+} // Intersaction
 
-} // 
+vector<set<string>> MultipleCube( vector<set<string>> A, vector<set<string>> B ) {
+    vector<set<string>> result ;
 
-void Subtition( ) {
+    for ( auto a : A ) {
+        for ( auto b : B ) {
+            set<string> temp ( a.begin(), a.end() ) ;
+            temp.insert( b.begin(), b.end() ) ;
+            result.push_back( temp ) ;
+        } // for
+    } // for
 
-} // Subtition
+    return result ;
+} // MultipleCube
 
-int PickHighestYK( vector<vector<set<string>>> Kernel ) {
+vector<set<string>> MinusCube(  vector<set<string>> A, vector<set<string>> B  ) {
+    for ( auto b : B ) {
+        for ( int i = 0 ; i < A.size() ; i ++ ) {
+            if ( A[i] == b ) {
+                A.erase( A.begin() + i ) ;
+                break ;
+            }
+        } // for
+    } // for
+
+    return A ;
+} // MinusCube
+
+pair<vector<set<string>>, vector<set<string>>> AlgebraicDivision( vector<set<string>> cubes, vector<set<string>> dividend ) {
+    vector<set<string>> Q, R;
+    for ( auto divide : dividend ) {
+        vector<set<string> >interPart ;
+        for ( auto cube : cubes ) {
+            if (includes(cube.begin(), cube.end(), divide.begin(), divide.end())) {
+                interPart.push_back( set<string>( cube.begin(), cube.end() ) ) ;
+            }
+        } // for
+
+        vector<set<string>> Di = cubesDivideC( interPart, divide ) ;
+
+        if ( interPart.empty() )
+            return make_pair(Q, cubes); 
+
+        if ( divide == dividend.front() ) {
+            Q = Di ;
+        } // if
+        else {
+            Q = IntersactionCube(Q, Di) ; // Q = Q ^ D
+        } // else
+    } // for
+    
+
+    // Calculate R = A - Q x B
+    R = MinusCube( cubes, MultipleCube(Q,dividend)) ;
+
+    return make_pair( Q,R) ;
+} // AlgebraicDivision
+
+bool Filtering( vector<set<string>> cubes, vector<set<string>> dividend  ) {
+    if ( dividend.size() > cubes.size() )
+        return false ;
+    else {
+        vector<string> temp1 = GetAllliteral(cubes) ;
+        vector<string> temp2 = GetAllliteral(dividend) ;
+        if ( temp2.size() > temp1.size() )
+            return false ;
+        set<string> tempset(temp1.begin(),temp1.end() ) ;
+        for ( auto div : temp2 ) {
+            if ( tempset.find(div) == tempset.end() ) 
+                return false ;
+        } // for
+    } // else
+
+    return true ;
+} // Filtering
+
+void Substitution( vector<set<string>> CoK ) {
+    for ( auto test : CoK ) {
+        for ( auto a : test ) {
+            cout << a <<  " " ;
+        } // for
+        cout << " + " ;
+    } // for
+    cout << endl ;
+
+    for ( int i = 0 ; i < gAllGateProductTerms.size() ; i ++ ) {
+        if ( Filtering( gAllGateProductTerms[i].Cubes, CoK ) ) {
+            auto result = AlgebraicDivision( gAllGateProductTerms[i].Cubes, CoK ) ;
+        } // if
+    } // for
+} // Substitution
+
+int CountCommas(string str) {
+    int count = 0;
+    for (char ch : str) 
+        if (ch == ',') 
+            count++;
+
+    return count;
+}
+
+int PickHighestYK( vector<vector<set<string>>> Kernel, vector<set<string>> CoK ) {
     int max_index = 0 ;
     int max = -1 ;
 
     // for ( auto eachKernelCubes : Kernel) {
-    for ( int i = 0 ; i < Kernel.size() ; i ++ ) {
-        set<string> tempset ;
-        for ( auto cube : Kernel[i] ) {
-            for (auto rit = cube.rbegin(); rit != cube.rend(); ++rit) {
-                string tempstring = *rit ;
-                if ( tempstring[0] == 'Y' ) {
-                    tempset.insert(tempstring) ;
-                    break ;
-                } 
-            }
-        } // for
-        if( int(tempset.size()) > max ) {
-            max_index = i ;
-            max = tempset.size() ;
-        }
-    }
+    for ( int i = 0 ; i < CoK.size() ; i ++ ) {
+        int eachCoKSize = CoK[i].size() ;
 
+        int temp_count = 0 ;
+        if ( eachCoKSize >= 2 ) {
+            for ( auto product : Kernel[i] ) {
+                for ( auto a : product )
+                    temp_count += CountCommas(a) ;
+                
+            } // for
+            temp_count = temp_count*2 - (CoK[i].size()+1) ;
+        } // if
+
+
+        if( temp_count > max ) {
+            max_index = i ;
+            max = temp_count;
+        }
+    } // for
     cout << "Maxindex " << max_index << " " << max << endl ;
+    cout << "Kernel: " << endl ;
+    for ( auto product : Kernel[max_index] ) {
+        for ( auto a : product ) {
+            cout << a ;
+        }
+        cout << " + " ;
+    } 
+    cout << endl ;
+    cout << "CoK: " << endl ;
+    for ( auto a : CoK[max_index]) {
+        cout << a << " " ;
+    }
+    cout << endl ;
+ 
     return max_index ;
 } // 
 
@@ -339,7 +461,7 @@ void runMultipleCubeExtraction() {
             for ( auto KernelCube : eachKernelCubes ) { // 每一個kernel裡面的productterm
                 string tempstring = "X" ;
                 for ( auto term : KernelCube ) // productterm
-                    tempstring += term ;
+                    tempstring += "," + term ;
                 
                 tempset.insert( tempstring ) ;
             } // for
@@ -391,15 +513,21 @@ void runMultipleCubeExtraction() {
     // } // for
 
     // cout << "}" << endl ;
-    int destinateCok = PickHighestYK(tempKernel) ; 
+    int destinateCok = PickHighestYK(tempKernel, tempCoKernel) ; 
+    vector<set<string>> cofactor ;
     for ( auto i : tempCoKernel[destinateCok] ) { // 這就是CoKernel 
-        i.erase(i.begin()) ;
-        cout << i ;
-    } 
-    cout << endl ;
+        istringstream iss(i);
+        string token;
+        set<string> tokens;
 
-    // 把CoKernel 裡面的X 刪掉並且轉成 vector<set<string>> 的形式
-    // substition
+        while (std::getline(iss, token, ',')) { // 
+            if ( token != "X" )    
+                tokens.insert(token);
+        }
+        cofactor.push_back(tokens) ;
+    } 
+    
+    Substitution(cofactor) ;
 } // runMultipleCubeExtraction
 
 void ManageOption(int argc, char const *argv[]) {  
@@ -434,7 +562,7 @@ int main(int argc, char const *argv[])
     ManageOption(argc, argv) ;
     readFile() ;
     PrintSumofProduct() ;
-    for ( int i = 0 ; i < 10 ; i ++ ) {
+    for ( int i = 0 ; i < 1 ; i ++ ) {
         runMultipleCubeExtraction() ;
     }
 
