@@ -6,6 +6,8 @@
 # include <unordered_map>
 # include <set>
 # include <unordered_set>
+# include <algorithm>
+
 using namespace std ;
 
 
@@ -19,8 +21,9 @@ string gNewToken ;
 string gblifFile ;
 vector<string> gInputs ;
 vector<string> gOutputs ;
-
+int gNewGateNum = 0 ;
 vector<ProductTerm> gAllGateProductTerms ;
+bool gisStopPaddingSubstitution = false ;
 
 void readUntilNotWhiteSpace( ifstream & file) ;
 string GetaToken(ifstream & file) ;
@@ -135,7 +138,7 @@ vector<string> readNameGate(ifstream & file ) {
     vector<string> temp ;
     string temp_string ;
     temp_string = PeekaToken(file) ;
-    while( ! temp_string.empty() && temp_string[0] != '.' && ! IsNumber(temp_string[0]) ) {
+    while( ! temp_string.empty() && temp_string[0] != '.' && ! IsNumber(temp_string[0]) && temp_string[0] != '-' ) {
         temp_string = GetaToken( file ) ;
         temp.push_back(temp_string) ;
         temp_string = PeekaToken(file) ;
@@ -206,7 +209,7 @@ set<string> CUBES_MAX(  vector<set<string>> cubes , string Xi ) {
     set<string> result ;
     result.insert(Xi) ;
     for ( auto i : cubes[0]) {
-        if ( i != Xi ) {
+        if ( i != Xi && i[0] != 'Y' ) {
             for ( auto cube : cubes ) {
                 if ( cube.find( i ) != cube.end() ) {
                     count_cube ++ ;
@@ -253,23 +256,24 @@ bool ExistBeforeLiteral( vector<string> allliteral, int index, set<string> Xi ) 
     return true ;
 } // ExistBeforeLiteral
 
-void Kernel( vector<set<string>> cubes, vector<string> allliteral,  int index, vector<vector<set<string>>> & K,  vector<set<string>> & coK ) {
+void Kernel( vector<set<string>> cubes, set<string> tempCo,  vector<string> allliteral,  int index, vector<vector<set<string>>> & K,  vector<set<string>> & coK ) {
     int  allliteral_size = allliteral.size() ;
     vector<set<string>> newkernel ;
     set<string> C ;
     for ( int i = index ; i < allliteral_size ; i ++ ) {
-        if ( CUBES( cubes, allliteral[i] ).size() >= 2 ) {
-            C = CUBES_MAX( cubes, allliteral[i]) ;
-
+        vector<set<string>> tempCube = CUBES( cubes, allliteral[i] ) ;
+        if ( tempCube.size() >= 2 ) {
+            C = CUBES_MAX( tempCube, allliteral[i]) ;
             if ( ExistBeforeLiteral( allliteral, i, C ) ) {
                 newkernel = cubesDivideC(cubes, C ) ;
-                Kernel( newkernel, allliteral, i+1, K, coK) ;
+                C.insert(tempCo.begin(), tempCo.end()) ;
+                Kernel( newkernel, C, allliteral, i+1, K, coK) ;
             }
         }
     } // for
 
     K.push_back( cubes ) ;
-    coK.push_back( C ) ;
+    coK.push_back( set<string>( tempCo.begin(), tempCo.end() ) ) ;
 } // Kernel
 
 vector<string> GetAllliteral( vector<set<string>> cubes ) {
@@ -379,10 +383,42 @@ void Substitution( vector<set<string>> CoK ) {
         cout << " + " ;
     } // for
     cout << endl ;
-
-    for ( int i = 0 ; i < gAllGateProductTerms.size() ; i ++ ) {
+    int countsubstitution = 0 ;
+    string newSubstitutionName ;
+    int gALLTermsSize = gAllGateProductTerms.size() ;
+    for ( int i = 0 ; i < gALLTermsSize ; i ++ ) {
         if ( Filtering( gAllGateProductTerms[i].Cubes, CoK ) ) {
             auto result = AlgebraicDivision( gAllGateProductTerms[i].Cubes, CoK ) ;
+            // for ( auto a : result.first ) {
+            //     for ( auto b : a  )
+            //         cout << "test " << b.size() << " " ;
+            //     cout << " + " ;
+            // }
+            if ( result.first.size() > 0 ) {
+                if ( countsubstitution == 0 ) {
+                    ProductTerm newproductterm ;
+                    newSubstitutionName = "NEW" + to_string(gNewGateNum) ;
+                    newproductterm.output = newSubstitutionName ;
+                    newproductterm.Cubes = CoK ;
+                    gAllGateProductTerms.push_back(newproductterm) ;
+                    gNewGateNum ++ ;
+                }
+                
+                vector<set<string>> newCube ;
+                for ( auto each : result.first ) {
+                    each.insert(newSubstitutionName) ;
+                    newCube.push_back(set<string>(each.begin(), each.end())) ;
+                } // for
+                for ( auto each : result.second ) {
+                    newCube.push_back( set<string>(each.begin(), each.end())) ;
+                } // for
+
+                gAllGateProductTerms[i].Cubes = newCube ;
+                countsubstitution ++ ;
+            } // if
+            else {
+                
+            }
         } // if
     } // for
 } // Substitution
@@ -400,20 +436,29 @@ int PickHighestYK( vector<vector<set<string>>> Kernel, vector<set<string>> CoK )
     int max_index = 0 ;
     int max = -1 ;
 
-    // for ( auto eachKernelCubes : Kernel) {
     for ( int i = 0 ; i < CoK.size() ; i ++ ) {
         int eachCoKSize = CoK[i].size() ;
 
         int temp_count = 0 ;
-        if ( eachCoKSize >= 2 ) {
-            for ( auto product : Kernel[i] ) {
-                for ( auto a : product )
-                    temp_count += CountCommas(a) ;
-                
-            } // for
-            temp_count = temp_count*2 - (CoK[i].size()+1) ;
-        } // if
+        if ( eachCoKSize >= 1 ) {
+            for ( auto a : CoK[i] )
+                temp_count += CountCommas(a) ;
 
+            set<string> tempset ;
+            for ( auto cube : Kernel[i] ) {
+                for (auto rit = cube.rbegin(); rit != cube.rend(); ++rit) {
+                    string tempstring = *rit ;
+                    if ( tempstring[0] == 'Y' ) {
+                        tempset.insert(tempstring) ;
+                        break ;
+                    } 
+                }
+            } // for
+
+            // cout << "index: " << i << " CoK literal: " <<  temp_count << " MatchKernel : " << tempset.size() << endl ;
+            temp_count = temp_count * ( tempset.size() -1 ) ;
+
+        } // if
 
         if( temp_count > max ) {
             max_index = i ;
@@ -421,32 +466,77 @@ int PickHighestYK( vector<vector<set<string>>> Kernel, vector<set<string>> CoK )
         }
     } // for
     cout << "Maxindex " << max_index << " " << max << endl ;
-    cout << "Kernel: " << endl ;
-    for ( auto product : Kernel[max_index] ) {
-        for ( auto a : product ) {
-            cout << a ;
-        }
-        cout << " + " ;
-    } 
-    cout << endl ;
-    cout << "CoK: " << endl ;
-    for ( auto a : CoK[max_index]) {
-        cout << a << " " ;
-    }
-    cout << endl ;
- 
+    // cout << "Kernel: " << endl ;
+    // for ( auto product : Kernel[max_index] ) {
+    //     for ( auto a : product ) {
+    //         cout << a ;
+    //     }
+    //     cout << " + " ;
+    // } 
+    // cout << endl ;
+    // cout << "CoK: " << endl ;
+    // for ( auto a : CoK[max_index]) {
+    //     cout << a << " " ;
+    // }
+    // cout << endl ;
     return max_index ;
+} // 
+
+void PersonalSubstitution( vector<set<string>> CoK, vector<vector<set<string>>> Kernel, int index) {
+    int maxKernelIndex = -1, max = -10, maxcount = -1 ;
+    for ( int i = 0 ; i < Kernel.size() ; i ++ ) {
+        int count = ((int(Kernel[i].size())-1) * CoK[i].size()) -2 ; // (k-1) * |Cok|-2
+        if ( count  > max ) {
+            max = count ;
+            maxKernelIndex = i ;
+            maxcount = int(Kernel[i].size()) ;
+        }   // if
+        else if ( count == max ) {
+            if ( int(Kernel[i].size()) > maxcount ) {
+                max = count ;
+                maxKernelIndex = i ;
+                maxcount = int(Kernel[i].size()) ;
+            }
+        }
+    } // for    
+    if ( max < 0 )
+        return ;
+
+    string newSubstitutionName ;
+    auto result = AlgebraicDivision( gAllGateProductTerms[index].Cubes, vector<set<string>>({CoK[maxKernelIndex]}) ) ;
+    if ( result.first.size() > 0 ) {
+        ProductTerm newproductterm ;
+        newSubstitutionName = "NEW" + to_string(gNewGateNum) ;
+        newproductterm.output = newSubstitutionName ;
+        newproductterm.Cubes = result.first ;
+        gAllGateProductTerms.push_back(newproductterm) ;
+        gNewGateNum ++ ;
+
+        vector<set<string>> newCube ;
+        newCube.push_back( set<string>(CoK[maxKernelIndex].begin(), CoK[maxKernelIndex].end() ) ) ;
+        newCube[0].insert(newSubstitutionName) ;
+        for ( auto each : result.second ) {
+            newCube.push_back( set<string>(each.begin(), each.end())) ;
+        } // for
+
+        gAllGateProductTerms[index].Cubes = newCube ;
+    } // if
+
+    
 } // 
 
 void runMultipleCubeExtraction() {
     vector<vector<vector<set<string>>>> eachProducttermsKernel ;
+    vector<vector<set<string>>> eachProducttermsCoK ;
     for ( int i = 0 ; i < gAllGateProductTerms.size() ; i ++ ) {
     // for ( int i = 2 ; i < 3 ; i ++ ) {
+        set<string> pertempCoK ;
         vector<vector<set<string>>> tempKernel ;
         vector<set<string>> tempCoKernel ;
         vector<string> tempLiteral = GetAllliteral(gAllGateProductTerms[i].Cubes) ;
-        Kernel( gAllGateProductTerms[i].Cubes, tempLiteral, 0, tempKernel, tempCoKernel ) ;
+        Kernel( gAllGateProductTerms[i].Cubes, pertempCoK,  tempLiteral, 0, tempKernel, tempCoKernel ) ;
         eachProducttermsKernel.push_back(tempKernel) ;
+        eachProducttermsCoK.push_back(tempCoKernel) ;
     } // for
 
     vector<set<string>> auxCube ;
@@ -455,12 +545,14 @@ void runMultipleCubeExtraction() {
         string NewTag = "Y" + to_string(i) ;
         // tempset.insert(NewTag) ;
         
-        for ( auto eachKernelCubes : eachProducttermsKernel[i] ) { // 有很多kernel
+        for ( int j = 0 ; j < eachProducttermsKernel[i].size()-1 ; j ++ ) { // 有很多kernel
             set<string> tempset ;
             tempset.insert(NewTag) ;
-            for ( auto KernelCube : eachKernelCubes ) { // 每一個kernel裡面的productterm
+            for ( auto KernelCube : eachProducttermsKernel[i][j] ) { // 每一個kernel裡面的productterm
                 string tempstring = "X" ;
-                for ( auto term : KernelCube ) // productterm
+                vector<string> sortedvec(KernelCube.begin(), KernelCube.end() );
+                sort( sortedvec.begin(), sortedvec.end() ) ;
+                for ( auto term : sortedvec ) // productterm
                     tempstring += "," + term ;
                 
                 tempset.insert( tempstring ) ;
@@ -479,12 +571,12 @@ void runMultipleCubeExtraction() {
     //         cout << " + " << endl  ;
     // } // for
     // cout << endl ;
-
+    set<string> pertempCoK ;
     vector<vector<set<string>>> tempKernel ;
     vector<set<string>> tempCoKernel ;
     vector<string> tempLiteral = GetAllliteral(auxCube) ;
-    Kernel( auxCube, tempLiteral, 0, tempKernel, tempCoKernel ) ;
-
+    Kernel( auxCube, pertempCoK, tempLiteral, 0, tempKernel, tempCoKernel ) ;
+    // cout << "Kernel:\n" ;
     // for ( auto eachKernelCubes : tempKernel) {
     //         cout << "{" ;
 
@@ -501,7 +593,7 @@ void runMultipleCubeExtraction() {
     // }
 
 
-    // cout << "{" ;
+    // cout << "CoK: " << tempCoKernel.size() << " \n{" ;
 
     // for ( auto cube : tempCoKernel ) {
     //     for ( auto i : cube ) {
@@ -527,9 +619,49 @@ void runMultipleCubeExtraction() {
         cofactor.push_back(tokens) ;
     } 
     
+    if ( cofactor.size() == 1 && cofactor[0].size() == 1 )
+        gisStopPaddingSubstitution = true ;
+    if ( gisStopPaddingSubstitution )
+        return ;
+    
     Substitution(cofactor) ;
 } // runMultipleCubeExtraction
 
+void runPersonalCubeExtraction() {
+    vector<vector<vector<set<string>>>> eachProducttermsKernel ;
+    vector<vector<set<string>>> eachProducttermsCoK ;
+    int allgateindex = 0 ;
+    while ( allgateindex < gAllGateProductTerms.size() ) {
+        cout << "PersonalExtraction Round: " << allgateindex << endl ;
+        set<string> pertempCoK ;
+        vector<vector<set<string>>> tempKernel ;
+        vector<set<string>> tempCoKernel ;
+        vector<string> tempLiteral = GetAllliteral(gAllGateProductTerms[allgateindex].Cubes) ;
+        Kernel( gAllGateProductTerms[allgateindex].Cubes, pertempCoK,  tempLiteral, 0, tempKernel, tempCoKernel ) ;
+        for ( int i = 0 ; i < tempKernel.size() ; i ++) {
+            cout << "{" ;
+
+            for ( auto cube : tempKernel[i] ) {
+                for ( auto i : cube ) {
+                    cout << i ;
+                } // for
+
+                if ( cube.size() != 0 && cube != tempKernel[i].back() )
+                    cout << " + "  ;
+            } // for
+
+            cout << "}" ;
+
+            for ( auto co : tempCoKernel[i])
+                cout << co << " " ;
+            cout << endl ;
+        }
+        cout << "PersonalSubstitution" << endl ;
+        PersonalSubstitution(tempCoKernel,tempKernel,allgateindex) ;
+        
+        allgateindex ++ ;
+    } // for
+} // runPersonalCubeExtraction
 void ManageOption(int argc, char const *argv[]) {  
     if (argc != 2) {
         cerr << "Usage: " << argv[0] << "BLIF_FILE" << std::endl;
@@ -562,60 +694,14 @@ int main(int argc, char const *argv[])
     ManageOption(argc, argv) ;
     readFile() ;
     PrintSumofProduct() ;
-    for ( int i = 0 ; i < 1 ; i ++ ) {
+    while( ! gisStopPaddingSubstitution ) {
         runMultipleCubeExtraction() ;
+        PrintSumofProduct() ;
+        // break;
     }
+
+    runPersonalCubeExtraction() ;
+    PrintSumofProduct() ;
 
     return 0;
 }
-
-/*
-multiple cube extraction{
-    先把每一個sumofproduct 去做kernel演算法 並且拿到kernel K() CoK()也要留
-
-    將每一個Kernel的值變成一個變數再做成一個productterm 並乘上自己的label
-
-    把新做的productterm全部or在一起 並且做一次kernel演算法得到 K() CoK()
-
-}
-
-f = vector<vector<string>> 
-kernels ( f, j, coKernel ) {
-    k = vector<vector<vector<string>>>
-    for i to n {
-        if CUBES(f,Xi).size() >= 2 {
-            C = cubes_max( f, xi )
-
-            temp = kernels( f/C, i + 1) ;
-            coKernel.push_back( C ) ;
-            k.push_back( temp ) ;
-        }
-    }
-
-}
-
-CUBES( vector<set<string>>  f, xi ) {
-
-    result = for each in f,  each contain xi 
-
-
-    return vector<set<string>>  ;
-}
-
-cubes_max( f / Xi) {
-    result = for each in f,  each contain xi 
-}
-
-substition( gAllGateProductTerms,  kernels ) {
-    for kernel in kernels :
-        for each in gAllGateProductTerms :
-            if kernel in each :
-                取代
-                new 新的gate
-}
-
-division () {
-
-}
-
-*/

@@ -1,0 +1,44 @@
+h = bd~a + a~b~d + beg~a + bfg~a + a~b~c~g + a~b~e~g + a~b~f~g + cdeg~a + defg~a + a~c~d~e~g + a~d~e~f~g
+i = abde + d~a~b~e + abdg + ag~b~d + bdeg + bdfg + d~a~b~g + d~b~c~g + b~a~d~g + d~b~f~g + d~a~b~c~f + b~a~d~e~f + ceg~b~d + efg~b~d + b~c~d~e~g + b~d~e~f~g + acef~b~d + acdf~e~g
+j = d~a + abe~d + abg~d + d~b~c~g + d~b~e~g + d~b~f~g + abcf~d
+k = abd + adg + acdef
+l = f~c + c~f
+m = ~c
+n = cfg + g~c~f + g~e~f + f~c~g + ce~f~g
+o = e~c + ef + c~e~f
+p = abeg + aceg + g~a~b~e + abfg + aefg + g~a~e~f + a~b~c~g + be~a~g + a~b~e~g + a~c~e~g + a~b~f~g + a~e~f~g + g~a~b~c~f + bcf~a~g + cef~a~g
+q = b~e~f + bcef + cf~b~e + e~b~c~f + bceg + befg + fg~b~e + e~b~c~g + b~c~e~g + e~b~f~g
+
+36
+o = bcdej~a + bdeij~a~c + bdeg~a~c~j + abcdejk + abdehij~c
+p = cdefm + f~d~e~l~n + cefgh~d~n
+
+o = bdev
+p = fy
+v = jw + g~a~c~j
+w = ck + x~a + hi~c
+x = c + i
+y = cez + ~d~e~l~n
+z = dm + gh~d~n
+
+26
+o = bdev
+v = cj~a + ij~a~c + g~a~c~j + acjk + ahij~c
+j (c~a + i~a~c + acjk + ahi~c)
+~c(ij~a + g~a~j + ahij~c)
+c(j~a + acjk)
+i(j~a~c + ahj~c)
+~a(cj + ij~c + g~c~j)
+
+(k-1) * |Cok|-2
+
+4 * 3 -2 = 10
+3 * 4 -2 = 10
+
+5 + 10 + 7 + 7 + 9 + 4 = 42
+o = NEW0bde
+p = NEW1cef + f~d~e~l~n
+NEW0 = NEW2j + g~a~c~j
+NEW1 = dm + gh~d~n
+NEW2 = NEW3i~c + c~a + ack
+NEW3 = ~a + ah
