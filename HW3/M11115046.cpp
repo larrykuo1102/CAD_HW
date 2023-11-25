@@ -433,12 +433,12 @@ int CountCommas(string str) {
 }
 
 int PickHighestYK( vector<vector<set<string>>> Kernel, vector<set<string>> CoK ) {
-    int max_index = 0 ;
+    int max_index = -1 ;
     int max = -1 ;
 
     for ( int i = 0 ; i < CoK.size() ; i ++ ) {
         int eachCoKSize = CoK[i].size() ;
-
+        CoK[i].erase("") ;
         int temp_count = 0 ;
         if ( eachCoKSize >= 1 ) {
             for ( auto a : CoK[i] )
@@ -460,7 +460,7 @@ int PickHighestYK( vector<vector<set<string>>> Kernel, vector<set<string>> CoK )
 
         } // if
 
-        if( temp_count > max ) {
+        if( temp_count > 0 && temp_count > max ) {
             max_index = i ;
             max = temp_count;
         }
@@ -606,6 +606,10 @@ void runMultipleCubeExtraction() {
 
     // cout << "}" << endl ;
     int destinateCok = PickHighestYK(tempKernel, tempCoKernel) ; 
+    if ( destinateCok < 0 )
+        gisStopPaddingSubstitution = true ;
+    if ( gisStopPaddingSubstitution )
+        return ;
     vector<set<string>> cofactor ;
     for ( auto i : tempCoKernel[destinateCok] ) { // 這就是CoKernel 
         istringstream iss(i);
@@ -689,10 +693,69 @@ void PrintSumofProduct() {
 
 }
 
+int calculateLiteral() {
+    int result = 0 ;
+    for ( auto each : gAllGateProductTerms ) 
+        for ( auto cubes : each.Cubes ) 
+            result += int(cubes.size()) ;
+
+    return result ;
+} // calculateLiteral
+
+void outputBLIF() {
+    ofstream outputfile("out.blif");
+    outputfile << ".model " << gModelName << endl ;
+    outputfile << ".inputs " ;
+    for ( auto input : gInputs ) 
+        outputfile << input << " " ;
+    outputfile << endl << ".outputs " ;
+    for ( auto output : gOutputs )
+        outputfile << output ;
+    outputfile << endl ;
+    for ( auto each : gAllGateProductTerms ) {
+        outputfile << ".names " ;
+        set<string> everySymbol ;
+        for ( auto cube : each.Cubes ) {
+            for ( auto a : cube ) {
+                if ( a [0] == '~' )
+                    everySymbol.insert(a.substr(1,a.size()-1)) ;
+                else  
+                    everySymbol.insert(a) ;
+            } // for
+        } // for
+
+        vector<string> everySymbolvec(everySymbol.begin(), everySymbol.end() ) ;
+        for ( auto symbol : everySymbolvec )
+            outputfile << symbol << " " ;
+        outputfile << endl ;
+
+        for ( auto cube : each.Cubes) {
+            string gatestring ;
+            for ( auto symbol : everySymbolvec ) {
+                if ( cube.find(symbol) != cube.end() ) {
+                    gatestring += "1" ;
+                } // if
+                else if (cube.find("~"+symbol) != cube.end()) {
+                    gatestring += "0" ;
+                } // else if
+                else {
+                    gatestring += "-" ;
+                }
+            }
+            gatestring += " 1\n" ;
+            outputfile << gatestring ;
+        }
+
+    } // for
+    outputfile << ".end" << endl ;
+
+} // outputBLIF
+
 int main(int argc, char const *argv[])
 {
     ManageOption(argc, argv) ;
     readFile() ;
+    int originalLiteralCount = calculateLiteral() ;
     PrintSumofProduct() ;
     while( ! gisStopPaddingSubstitution ) {
         runMultipleCubeExtraction() ;
@@ -702,6 +765,9 @@ int main(int argc, char const *argv[])
 
     runPersonalCubeExtraction() ;
     PrintSumofProduct() ;
-
+    int newLiteralCount = calculateLiteral() ;
+    cout << "originalLiterCount: " << originalLiteralCount << endl ;
+    cout << "newLiteralCount: " << newLiteralCount << endl ;
+    outputBLIF() ;
     return 0;
 }
